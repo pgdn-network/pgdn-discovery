@@ -1,6 +1,6 @@
 # PGDN Discovery
 
-A professional Python library for discovering DePIN (Decentralized Physical Infrastructure Network) protocols on network nodes. Designed for both library integration and command-line usage with a clean, configurable API.
+A professional Python library for discovering DePIN (Decentralized Physical Infrastructure Network) protocols on network nodes. Designed as a library-first tool with optional command-line interface for protocol probing and detection.
 
 ## Features
 
@@ -8,7 +8,7 @@ A professional Python library for discovering DePIN (Decentralized Physical Infr
 - 🚀 **High Performance**: Fast network probing with nmap integration
 - 🤖 **AI-Powered Analysis**: Advanced protocol identification using OpenAI/Anthropic APIs
 - 📊 **Confidence Scoring**: Reliable confidence levels for protocol detection
-- 🔧 **Library First**: Designed primarily as a Python library with optional CLI
+- 🔧 **Library First**: Clean Python package structure with modular components
 - 🎯 **Evidence-Based**: Detailed evidence collection for protocol identification
 - 📄 **Structured Results**: Standardized result objects with full metadata
 - ⚡ **Nmap Integration**: Professional-grade port scanning capabilities
@@ -29,93 +29,97 @@ pip install -e .
 
 ## Library Usage
 
-### Professional Discovery API (Recommended)
+### Basic Network Discovery
 
-The modern, clean API for professional usage:
-
-```python
-from pgdn_discovery import create_discovery_client
-
-# Create a discovery client
-client = create_discovery_client(timeout=60, debug=True)
-
-# Run comprehensive discovery
-result = client.run_discovery(
-    target='192.168.1.100',
-    enabled_methods=['probe', 'protocol', 'ai'],
-    enabled_tools=['nmap', 'http_client']
-)
-
-# Check results
-if result.success:
-    print(f"Discovered protocol: {result.protocol}")
-    print(f"Confidence: {result.confidence}")
-    print(f"Discovery ID: {result.discovery_id}")
-    print(f"Duration: {result.duration_seconds}s")
-else:
-    print(f"Discovery failed: {result.errors}")
-```
-
-### Targeted Probe Discovery
-
-For specific port/path combinations:
+The core discovery functionality:
 
 ```python
-# Targeted probe discovery (Stage 1 + optional AI)
-result = client.run_probe_discovery(
-    target='192.168.1.100',
-    probes=[
-        {"port": 9000, "path": "/metrics"},
-        {"port": 1234, "path": "/rpc/v0"}
-    ],
-    include_ai=True  # Enable AI analysis
-)
+from pgdn_discovery import discover_node, NetworkProber
 
-print(f"Protocol: {result.protocol}")
-print(f"Confidence: {result.confidence}")
-```
-
-### DePIN Protocol Discovery
-
-For common DePIN protocols with predefined probes:
-
-```python
-# Discover common DePIN protocols
-result = client.discover_depin_protocols(
-    target='192.168.1.100',
-    include_ai=True
-)
-
-print(f"Detected: {result.protocol}")
-print(f"Evidence: {result.evidence}")
-```
-
-### Quick Discovery
-
-For simple use cases:
-
-```python
-from pgdn_discovery import discover_node
-
-# Quick discovery with defaults
+# Quick discovery using the convenience function
 result = discover_node("192.168.1.100")
+print(f"Open ports: {result['open_ports']}")
+print(f"HTTP responses: {result['http_responses']}")
 
-if result.success:
-    print(f"Found: {result.protocol} (confidence: {result.confidence})")
+# Advanced usage with NetworkProber class
+prober = NetworkProber(timeout=10)
+result = prober.discover("192.168.1.100", stage="all")
+print(f"Duration: {result.duration_seconds}s")
 ```
 
-### Available Methods and Tools
+### Targeted Protocol Probing
+
+For specific port/path combinations using the CLI with JSON input:
 
 ```python
-# Check available discovery methods
-methods = client.get_available_methods()
-print("Available methods:", methods)
-# Output: {'probe': 'Targeted port/path probing...', 'web': '...', etc.}
+from pgdn_discovery.discovery_components.probe_scanner import ProbeScanner
 
-# Check available tools
-tools = client.get_available_tools()
-print("Available tools:", tools)
-# Output: {'nmap': 'Network port scanning', 'http_client': '...', etc.}
+# Initialize probe scanner
+scanner = ProbeScanner(timeout=5)
+
+# Define probes
+probes = [
+    {"protocol": "sui", "port": 9000, "path": "/metrics"},
+    {"protocol": "ethereum", "port": 8545, "path": "/"}
+]
+
+# Run probes
+result = scanner.probe_services("192.168.1.100", probes)
+if not result.error:
+    for probe_data in result.data:
+        print(f"Port {probe_data.port}: {probe_data.status_code}")
+```
+
+### Staged Discovery
+
+Run discovery in stages:
+
+```python
+from pgdn_discovery import NetworkProber
+
+prober = NetworkProber(timeout=5)
+
+# Stage 1: Port scanning only
+result = prober.discover("192.168.1.100", stage="1")
+print(f"Open ports: {result.open_ports}")
+
+# Stage 2: Web scanning only (assumes ports are open)
+result = prober.discover("192.168.1.100", stage="2", ports=[80, 443, 9000])
+print(f"HTTP responses: {result.http_responses}")
+
+# All stages
+result = prober.discover("192.168.1.100", stage="all")
+```
+
+### Custom Ports and Paths
+
+Specify custom ports and paths for discovery:
+
+```python
+from pgdn_discovery import discover_node, COMMON_PORTS, COMMON_ENDPOINTS
+
+# Use custom ports and paths
+custom_ports = [80, 443, 8080, 9000]
+custom_paths = ["/", "/metrics", "/api/v1/status"]
+
+result = discover_node(
+    "192.168.1.100",
+    ports=custom_ports,
+    paths=custom_paths,
+    timeout=10
+)
+```
+
+### Default Constants
+
+```python
+from pgdn_discovery import COMMON_PORTS, COMMON_ENDPOINTS
+
+print("Default ports:", COMMON_PORTS)
+# Output: [80, 443, 8080, 9000, 8545, 30303]
+
+print("Default endpoints:", COMMON_ENDPOINTS)
+# Output: ["/, "/metrics", "/health", "/rpc/v0", "/status"]
 ```
 
 ## Discovery Result Format
@@ -125,74 +129,86 @@ The `DiscoveryResult` object provides comprehensive information:
 ```python
 @dataclass
 class DiscoveryResult:
-    success: bool                    # Whether discovery succeeded
-    target: str                      # Target IP/hostname
-    discovery_id: str               # Unique discovery identifier
+    ip: str                          # Target IP address
+    open_ports: List[int]           # List of open ports found
+    http_responses: Dict[int, Dict[str, Dict[str, Any]]]  # Port -> Path -> Response data
+    tls_info: Dict[int, Dict[str, Any]]  # TLS certificate info by port
+    errors: Dict[str, str]          # Any errors encountered
     timestamp: str                  # ISO timestamp
     duration_seconds: float         # Discovery duration
-    enabled_methods: List[str]      # Methods used
-    enabled_tools: List[str]        # Tools used
-    protocol: Optional[str]         # Detected protocol (if any)
-    confidence: float               # Confidence score (0.0-1.0)
-    evidence: Dict[str, Any]        # Evidence for detection
-    raw_data: Dict[str, Any]        # Raw discovery data
-    errors: List[str]               # Any errors encountered
-    metadata: Dict[str, Any]        # Additional metadata
+    
+    def to_dict(self) -> Dict[str, Any]:  # Convert to dictionary
+        return asdict(self)
 ```
 
 ## CLI Usage
 
-The package includes a command-line interface for standalone usage.
+The package includes a command-line interface for targeted protocol probing.
 
-### File Structure Note
+### Two-Stage Discovery CLI
 
-- **`cli.py`** - CLI entry point (when package is run as `python -m pgdn_discovery` or via console script)
-- **`lib/discovery_client.py`** - Main library API (new professional interface)
-- **`lib/discovery.py`** - Legacy discovery functions (backward compatibility)
-- **`lib/discovery_components/`** - Core discovery components (probe scanner, AI detector, etc.)
-
-### CLI Commands
+The CLI accepts JSON protocol definitions and performs targeted probing:
 
 ```bash
-# Legacy discovery mode (backward compatibility)
-pgdn-discovery discover 192.168.1.100
-pgdn-discovery discover 192.168.1.100 --stage 1 --ports 80,443,9000
-pgdn-discovery discover 192.168.1.100 --timeout 30
+# Probe specific protocol endpoints
+echo '[{"protocol":"sui","results":[{"port":9000,"path":"/metrics"}]}]' | pgdn-discovery probe 192.168.1.100
 
-# Output is JSON format for scripting
-pgdn-discovery discover example.com | jq '.result.protocol'
+# From file
+pgdn-discovery probe 192.168.1.100 --input protocols.json
+
+# With custom timeout
+pgdn-discovery probe 192.168.1.100 --input protocols.json --timeout 10
 ```
 
-The CLI uses the legacy discovery interface for backward compatibility. For new applications, we recommend using the library API directly.
+### Input JSON Format
 
-## Configuration Options
-
-### Discovery Methods
-
-- **`probe`** - Targeted port/path probing with nmap integration
-- **`web`** - HTTP/HTTPS service detection and analysis
-- **`protocol`** - DePIN protocol identification via signatures
-- **`ai`** - AI-powered protocol detection (requires API keys)
-- **`signature`** - Binary signature matching
-
-### External Tools
-
-- **`nmap`** - Network port scanning
-- **`http_client`** - HTTP request processing
-- **`tls_analyzer`** - TLS/SSL certificate analysis
-- **`banner_grabber`** - Service banner detection
-
-### AI Configuration
-
-For AI-powered analysis, set environment variables:
-
-```bash
-export OPENAI_API_KEY="your-openai-key"
-# or
-export ANTHROPIC_API_KEY="your-anthropic-key"
+```json
+[
+  {
+    "protocol": "sui",
+    "results": [
+      {
+        "port": 9000,
+        "path": "/metrics"
+      }
+    ]
+  },
+  {
+    "protocol": "ethereum",
+    "results": [
+      {
+        "port": 8545,
+        "path": "/"
+      }
+    ]
+  }
+]
 ```
 
-The AI analysis will automatically activate when API keys are available and confidence thresholds are met.
+## Package Structure
+
+The library is organized into modular components:
+
+```
+pgdn_discovery/
+├── __init__.py                   # Main package exports
+├── discovery.py                  # Core NetworkProber class
+├── discovery_client.py           # Enhanced discovery client
+├── discovery_components/         # Discovery components
+│   ├── probe_scanner.py         # Two-stage probe scanner
+│   ├── ai_detector.py           # AI-powered detection
+│   ├── binary_matcher.py        # Protocol matching
+│   ├── config_helper.py         # Configuration utilities
+│   └── nmap_scanner.py          # Network scanning
+├── core/
+│   └── logging.py               # Logging utilities
+└── tools/
+    └── __init__.py              # Tool utilities
+
+cli.py                           # CLI entry point
+tests.py                         # Test suite
+setup.py                         # Package configuration
+```
 
 ## Supported Protocols
 
@@ -220,67 +236,67 @@ Detection uses multiple methods:
 ### Batch Discovery
 
 ```python
-import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from pgdn_discovery import discover_node
 
-def discover_network_range(client, network_base="192.168.1", start=1, end=254):
+def discover_network_range(network_base="192.168.1", start=1, end=254):
     """Discover all nodes in a network range"""
     
     def discover_single(ip):
         host = f"{network_base}.{ip}"
-        return client.run_discovery(host)
+        return discover_node(host, timeout=5)
     
     with ThreadPoolExecutor(max_workers=20) as executor:
         hosts = range(start, end + 1)
         results = list(executor.map(discover_single, hosts))
     
     # Filter successful discoveries
-    found_nodes = [r for r in results if r.success and r.protocol]
+    found_nodes = [r for r in results if r['open_ports']]
     return found_nodes
 
 # Usage
-client = create_discovery_client(timeout=10)
-nodes = discover_network_range(client, "192.168.1", 1, 50)
+nodes = discover_network_range("192.168.1", 1, 50)
 for node in nodes:
-    print(f"Found {node.protocol} at {node.target}")
+    print(f"Found open ports {node['open_ports']} at {node['ip']}")
 ```
 
 ### Custom Protocol Detection
 
 ```python
-# Configure custom probes for specific protocols
-custom_probes = [
-    {"port": 1234, "path": "/custom/api"},
-    {"port": 5678, "path": "/health"},
+# Use the CLI with custom protocol definitions
+import json
+import subprocess
+
+custom_protocols = [
+    {
+        "protocol": "custom_service",
+        "results": [
+            {"port": 1234, "path": "/custom/api"},
+            {"port": 5678, "path": "/health"}
+        ]
+    }
 ]
 
-result = client.run_probe_discovery(
-    target="192.168.1.100",
-    probes=custom_probes
-)
+# Write to file and use CLI
+with open('custom_protocols.json', 'w') as f:
+    json.dump(custom_protocols, f)
+
+result = subprocess.run([
+    'pgdn-discovery', 'probe', '192.168.1.100',
+    '--input', 'custom_protocols.json'
+], capture_output=True, text=True)
+
+print(result.stdout)
 ```
 
 ## Development
 
-### Project Structure
+### Core Components
 
-```
-lib/
-├── discovery_client.py       # Main discovery API (new)
-├── discovery.py              # Legacy discovery functions
-├── discovery_components/     # Core detection components
-│   ├── probe_scanner.py     # Two-stage probe scanner
-│   ├── ai_detector.py       # AI-powered detection
-│   ├── binary_matcher.py    # Protocol matching
-│   └── nmap_scanner.py      # Network scanning
-└── core/
-    └── logging.py           # Logging utilities
-
-cli.py                       # CLI entry point
-__init__.py                  # Package exports
-setup.py                     # Package setup
-requirements.txt             # Dependencies
-```
+- **NetworkProber**: Main discovery class with staged scanning
+- **ProbeScanner**: Targeted protocol probing with nmap integration
+- **DiscoveryResult**: Standardized result format
+- **discover_node**: Convenience function for quick discovery
 
 ### Adding New Protocols
 
@@ -296,36 +312,28 @@ The modular design allows easy protocol addition:
 python tests.py
 ```
 
-## Migration Guide
+## Examples
 
-### From Legacy API to New API
+### Basic Port Scanning
 
-**Old (Legacy):**
+```python
+from pgdn_discovery import NetworkProber
+
+prober = NetworkProber(timeout=5)
+result = prober.discover("192.168.1.100", stage="1")
+print(f"Found {len(result.open_ports)} open ports: {result.open_ports}")
+```
+
+### HTTP Service Discovery
+
 ```python
 from pgdn_discovery import discover_node
-result = discover_node("192.168.1.100")
-```
 
-**New (Recommended):**
-```python
-from pgdn_discovery import create_discovery_client
-client = create_discovery_client()
-result = client.run_discovery("192.168.1.100")
-```
-
-The new API provides:
-- Configurable discovery methods and tools
-- Structured result objects with full metadata
-- Discovery session tracking
-- Enhanced error handling
-
-### Backward Compatibility
-
-The legacy API remains available as `legacy_discover_node` for existing code:
-
-```python
-from pgdn_discovery import legacy_discover_node
-result = legacy_discover_node("192.168.1.100")  # Old format result
+result = discover_node("192.168.1.100", stage="2", ports=[80, 443, 8080])
+for port, responses in result['http_responses'].items():
+    for path, data in responses.items():
+        if 'status_code' in data:
+            print(f"Port {port}{path}: HTTP {data['status_code']}")
 ```
 
 ## Performance Considerations

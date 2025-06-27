@@ -21,11 +21,11 @@ setup(
     author_email="team@pgdn.network",
     url="https://github.com/pgdn-network/pgdn-discovery",
     packages=find_packages(),
-    py_modules=['pgdn_discovery'],  # Include the root level module
+    py_modules=['cli'],  # Include the root level module
     install_requires=read_requirements(),
     entry_points={
         'console_scripts': [
-            'pgdn-discovery=pgdn_discovery:main',
+            'pgdn-discovery=cli:main',
         ],
     },
     classifiers=[

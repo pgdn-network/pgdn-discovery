@@ -1,17 +1,18 @@
 # PGDN Discovery
 
-A lightweight Python library for discovering DePIN (Decentralized Physical Infrastructure Network) protocols on network nodes. Designed for integration into other applications with both simple and advanced APIs.
+A professional Python library for discovering DePIN (Decentralized Physical Infrastructure Network) protocols on network nodes. Designed for both library integration and command-line usage with a clean, configurable API.
 
 ## Features
 
-- 🔍 **Protocol Detection**: Automatically identify common DePIN protocols (Filecoin, Ethereum, Sui, etc.)
-- 🚀 **High Performance**: Fast network scanning with intelligent port detection
-- 📊 **Confidence Scoring**: Get confidence levels for protocol detection
+- 🔍 **Professional Discovery API**: Clean, configurable discovery methods and tools
+- 🚀 **High Performance**: Fast network probing with nmap integration
+- 🤖 **AI-Powered Analysis**: Advanced protocol identification using OpenAI/Anthropic APIs
+- 📊 **Confidence Scoring**: Reliable confidence levels for protocol detection
 - 🔧 **Library First**: Designed primarily as a Python library with optional CLI
-- 📈 **Performance Metrics**: Track scanning time and coverage
+- 📈 **Organization Tracking**: Built-in support for org_id and discovery tracking
 - 🎯 **Evidence-Based**: Detailed evidence collection for protocol identification
-- 📄 **JSON Output**: All results returned as structured JSON objects
-- ⚡ **No Dependencies**: Minimal external dependencies for easy integration
+- 📄 **Structured Results**: Standardized result objects with full metadata
+- ⚡ **Nmap Integration**: Professional-grade port scanning capabilities
 
 ## Installation
 
@@ -27,285 +28,242 @@ cd pgdn-discovery
 pip install -e .
 ```
 
-For development:
-
-```bash
-pip install -r requirements.txt
-```
-
 ## Library Usage
 
-### Quick Start
+### Professional Discovery API (Recommended)
 
-The simplest way to use PGDN Discovery in your application:
-
-```python
-from pgdn_discovery import discover_node
-
-# Basic discovery
-result = discover_node("192.168.1.100")
-
-if result["success"]:
-    protocol = result["result"]["protocol"]
-    confidence = result["result"]["confidence"]
-    score = result["result"]["confidence_score"]
-    print(f"Detected: {protocol} (confidence: {confidence}, score: {score})")
-else:
-    print(f"Discovery failed: {result['error']}")
-```
-
-### Advanced Library Integration
-
-For applications that need to discover multiple nodes or require custom configuration:
+The modern, clean API for professional usage:
 
 ```python
 from pgdn_discovery import create_discovery_client
 
-# Create a reusable client with custom settings
-client = create_discovery_client(
-    timeout=60,
-    debug=True,
-    custom_ports=[8080, 9000, 3000]  # Add custom ports to scan
+# Create a discovery client
+client = create_discovery_client(timeout=60, debug=True)
+
+# Run comprehensive discovery
+result = client.run_discovery(
+    target='192.168.1.100',
+    org_id='myorg',
+    enabled_methods=['probe', 'protocol', 'ai'],
+    enabled_tools=['nmap', 'http_client']
 )
 
-# Discover multiple hosts efficiently
-hosts = ["192.168.1.100", "192.168.1.101", "example.com"]
-results = []
-
-for host in hosts:
-    result = client.discover_node(host, node_id=f"node-{host}")
-    results.append(result)
-    
-    if result["success"]:
-        protocol = result["result"]["protocol"]
-        print(f"{host}: {protocol}")
-    else:
-        print(f"{host}: Failed - {result['error']}")
-
-# Access detailed evidence for each discovery
-for result in results:
-    if result["success"]:
-        evidence = result["result"]["evidence"]
-        ports = result["result"]["scan_data"]["open_ports"]
-        print(f"Open ports on {result['host']}: {ports}")
+# Check results
+if result.success:
+    print(f"Discovered protocol: {result.protocol}")
+    print(f"Confidence: {result.confidence}")
+    print(f"Discovery ID: {result.discovery_id}")
+    print(f"Duration: {result.duration_seconds}s")
+else:
+    print(f"Discovery failed: {result.errors}")
 ```
 
-### Integration with Web Applications
+### Targeted Probe Discovery
 
-Example Flask integration:
+For specific port/path combinations:
 
 ```python
-from flask import Flask, request, jsonify
-from pgdn_discovery import discover_node
+# Targeted probe discovery (Stage 1 + optional AI)
+result = client.run_probe_discovery(
+    target='192.168.1.100',
+    probes=[
+        {"port": 9000, "path": "/metrics"},
+        {"port": 1234, "path": "/rpc/v0"}
+    ],
+    org_id='myorg',
+    include_ai=True  # Enable AI analysis
+)
 
-app = Flask(__name__)
-
-@app.route('/discover', methods=['POST'])
-def api_discover():
-    data = request.get_json()
-    
-    if not data or 'host' not in data:
-        return jsonify({"error": "Host parameter required"}), 400
-    
-    host = data['host']
-    node_id = data.get('node_id')
-    timeout = data.get('timeout', 30)
-    
-    # Perform discovery
-    result = discover_node(host, node_id=node_id, timeout=timeout)
-    
-    return jsonify(result)
-
-if __name__ == '__main__':
-    app.run(debug=True)
+print(f"Protocol: {result.protocol}")
+print(f"Confidence: {result.confidence}")
 ```
 
-### Batch Discovery for Network Analysis
+### DePIN Protocol Discovery
 
-For network analysis applications:
+For common DePIN protocols with predefined probes:
+
+```python
+# Discover common DePIN protocols
+result = client.discover_depin_protocols(
+    target='192.168.1.100',
+    org_id='myorg',
+    include_ai=True
+)
+
+print(f"Detected: {result.protocol}")
+print(f"Evidence: {result.evidence}")
+```
+
+### Quick Discovery
+
+For simple use cases:
+
+```python
+from pgdn_discovery import discover_node
+
+# Quick discovery with defaults
+result = discover_node("192.168.1.100")
+
+if result.success:
+    print(f"Found: {result.protocol} (confidence: {result.confidence})")
+```
+
+### Available Methods and Tools
+
+```python
+# Check available discovery methods
+methods = client.get_available_methods()
+print("Available methods:", methods)
+# Output: {'probe': 'Targeted port/path probing...', 'web': '...', etc.}
+
+# Check available tools
+tools = client.get_available_tools()
+print("Available tools:", tools)
+# Output: {'nmap': 'Network port scanning', 'http_client': '...', etc.}
+```
+
+## Discovery Result Format
+
+The `DiscoveryResult` object provides comprehensive information:
+
+```python
+@dataclass
+class DiscoveryResult:
+    success: bool                    # Whether discovery succeeded
+    target: str                      # Target IP/hostname
+    org_id: Optional[str]           # Organization identifier
+    discovery_id: str               # Unique discovery identifier
+    timestamp: str                  # ISO timestamp
+    duration_seconds: float         # Discovery duration
+    enabled_methods: List[str]      # Methods used
+    enabled_tools: List[str]        # Tools used
+    protocol: Optional[str]         # Detected protocol (if any)
+    confidence: float               # Confidence score (0.0-1.0)
+    evidence: Dict[str, Any]        # Evidence for detection
+    raw_data: Dict[str, Any]        # Raw discovery data
+    errors: List[str]               # Any errors encountered
+    metadata: Dict[str, Any]        # Additional metadata
+```
+
+## CLI Usage
+
+The package includes a command-line interface for standalone usage.
+
+### File Structure Note
+
+- **`cli.py`** - CLI entry point (when package is run as `python -m pgdn_discovery` or via console script)
+- **`lib/discovery_client.py`** - Main library API (new professional interface)
+- **`lib/discovery.py`** - Legacy discovery functions (backward compatibility)
+- **`lib/discovery_components/`** - Core discovery components (probe scanner, AI detector, etc.)
+
+### CLI Commands
+
+```bash
+# Legacy discovery mode (backward compatibility)
+pgdn-discovery discover 192.168.1.100
+pgdn-discovery discover 192.168.1.100 --stage 1 --ports 80,443,9000
+pgdn-discovery discover 192.168.1.100 --timeout 30
+
+# Output is JSON format for scripting
+pgdn-discovery discover example.com | jq '.result.protocol'
+```
+
+The CLI uses the legacy discovery interface for backward compatibility. For new applications, we recommend using the library API directly.
+
+## Configuration Options
+
+### Discovery Methods
+
+- **`probe`** - Targeted port/path probing with nmap integration
+- **`web`** - HTTP/HTTPS service detection and analysis
+- **`protocol`** - DePIN protocol identification via signatures
+- **`ai`** - AI-powered protocol detection (requires API keys)
+- **`signature`** - Binary signature matching
+
+### External Tools
+
+- **`nmap`** - Network port scanning
+- **`http_client`** - HTTP request processing
+- **`tls_analyzer`** - TLS/SSL certificate analysis
+- **`banner_grabber`** - Service banner detection
+
+### AI Configuration
+
+For AI-powered analysis, set environment variables:
+
+```bash
+export OPENAI_API_KEY="your-openai-key"
+# or
+export ANTHROPIC_API_KEY="your-anthropic-key"
+```
+
+The AI analysis will automatically activate when API keys are available and confidence thresholds are met.
+
+## Supported Protocols
+
+Currently detects these DePIN protocols:
+
+- **Filecoin/IPFS** - Storage networks and gateways
+- **Ethereum** - Execution and consensus clients
+- **Sui** - Full nodes and validators
+- **Celestia** - Data availability nodes
+- **Cosmos/Tendermint** - Consensus and application layers
+- **Polkadot/Substrate** - Relay and parachain nodes
+- **Solana** - Validators and RPC nodes
+- **Theta** - Video delivery networks
+- **Helium** - IoT and mobile networks
+
+Detection uses multiple methods:
+1. **Port Scanning** - Protocol-specific ports with nmap
+2. **HTTP Endpoints** - API endpoint probing
+3. **Banner Analysis** - Service banner pattern matching
+4. **Content Analysis** - Response content signatures
+5. **AI Analysis** - Machine learning protocol identification
+
+## Advanced Usage
+
+### Batch Discovery
 
 ```python
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from pgdn_discovery import discover_node
 
-def discover_network_range(network_base="192.168.1", start=1, end=254):
+def discover_network_range(client, network_base="192.168.1", start=1, end=254):
     """Discover all nodes in a network range"""
     
     def discover_single(ip):
         host = f"{network_base}.{ip}"
-        return discover_node(host, timeout=10)
+        return client.run_discovery(host, org_id="network_scan")
     
-    # Use thread pool for concurrent discovery
     with ThreadPoolExecutor(max_workers=20) as executor:
         hosts = range(start, end + 1)
         results = list(executor.map(discover_single, hosts))
     
     # Filter successful discoveries
-    found_nodes = []
-    for result in results:
-        if result["success"] and result["result"]["protocol"]:
-            found_nodes.append({
-                "host": result["host"],
-                "protocol": result["result"]["protocol"],
-                "confidence": result["result"]["confidence"],
-                "confidence_score": result["result"]["confidence_score"]
-            })
-    
+    found_nodes = [r for r in results if r.success and r.protocol]
     return found_nodes
 
 # Usage
-nodes = discover_network_range("192.168.1", 1, 50)
+client = create_discovery_client(timeout=10)
+nodes = discover_network_range(client, "192.168.1", 1, 50)
 for node in nodes:
-    print(f"Found {node['protocol']} node at {node['host']}")
+    print(f"Found {node.protocol} at {node.target}")
 ```
 
 ### Custom Protocol Detection
 
-To add support for your own protocols:
-
 ```python
-from pgdn_discovery import ProtocolDiscovery
+# Configure custom probes for specific protocols
+custom_probes = [
+    {"port": 1234, "path": "/custom/api"},
+    {"port": 5678, "path": "/health"},
+]
 
-# Create discovery instance with custom protocol signatures
-custom_protocols = {
-    'my_custom_protocol': {
-        'ports': [1234, 5678],
-        'endpoints': ['/api/status', '/health'],
-        'content_patterns': ['my_protocol_v', 'node_version'],
-        'headers': ['x-my-protocol-version']
-    }
-}
-
-discovery = ProtocolDiscovery(
-    timeout=30,
-    custom_protocols=custom_protocols
+result = client.run_probe_discovery(
+    target="192.168.1.100",
+    probes=custom_probes,
+    org_id="custom_discovery"
 )
-
-result = discovery.discover_node("192.168.1.100")
-```
-
-## Response Format
-
-All discovery results are returned as structured JSON objects:
-
-```python
-{
-    "success": True,
-    "operation": "discovery",
-    "host": "192.168.1.100",
-    "node_id": "optional-node-id",
-    "result": {
-        "protocol": "filecoin",           # Detected protocol name or None
-        "confidence": "high",             # high, medium, low, unknown
-        "confidence_score": 0.85,         # Numeric score 0.0 to 1.0
-        "evidence": {
-            "port_matches": {             # Ports that matched protocol signatures
-                "filecoin": [1234, 5678]
-            },
-            "content_matches": {          # HTTP content that matched
-                "filecoin": [
-                    {
-                        "port": 1234,
-                        "endpoint": "/api/v0/id",
-                        "pattern": "lotus"
-                    }
-                ]
-            },
-            "header_matches": {...},      # HTTP headers that matched
-            "banner_matches": {...}       # TCP banners that matched
-        },
-        "scan_data": {
-            "open_ports": [22, 1234, 5678],
-            "http_responses": {           # Raw HTTP responses
-                "1234": {
-                    "/api/v0/id": {"status": 200, "content": "..."}
-                }
-            },
-            "tcp_banners": {}             # Raw TCP banner data
-        },
-        "performance_metrics": {
-            "discovery_time_seconds": 2.3,
-            "scanned_ports": 12,
-            "http_endpoints_checked": 8
-        },
-        "host": "192.168.1.100",
-        "timestamp": "2024-01-01T12:00:00.000000"
-    }
-}
-```
-
-## Supported Protocols
-
-Currently detects the following DePIN protocols:
-
-- **Filecoin**: Lotus nodes, miners, and gateways
-- **Ethereum**: Geth, consensus clients, and RPC endpoints  
-- **Sui**: Full nodes and validators
-
-The library uses multiple detection methods:
-
-1. **Port Scanning**: Checks for protocol-specific ports
-2. **HTTP Endpoints**: Tests common API endpoints
-3. **Content Analysis**: Searches for protocol-specific patterns in responses
-4. **Header Analysis**: Examines HTTP headers for protocol indicators
-5. **Banner Grabbing**: Analyzes TCP service banners
-
-## CLI Usage (Optional)
-
-While designed as a library, a CLI tool is also provided:
-
-```bash
-# Basic discovery
-pgdn-discovery 192.168.1.100
-
-# JSON output for scripting
-pgdn-discovery example.com --json
-
-# With custom options
-pgdn-discovery 10.0.0.1 --node-id abc123 --timeout 60 --debug
-```
-
-## Configuration Options
-
-The library supports various configuration options:
-
-```python
-from pgdn_discovery import ProtocolDiscovery
-
-# Create with custom configuration
-discovery = ProtocolDiscovery(
-    timeout=60,                    # Network timeout in seconds
-    max_threads=10,                # Max concurrent threads
-    port_scan_timeout=5,           # Port scan timeout
-    http_timeout=10,               # HTTP request timeout
-    debug=True,                    # Enable debug logging
-    custom_ports=[8080, 9000],     # Additional ports to scan
-    skip_ping=False                # Whether to skip initial ping test
-)
-
-result = discovery.discover_node("192.168.1.100")
-```
-
-## Error Handling
-
-The library provides comprehensive error handling:
-
-```python
-result = discover_node("unreachable-host.example")
-
-if not result["success"]:
-    error_type = result.get("error_type", "unknown")
-    error_message = result["error"]
-    
-    if error_type == "network_timeout":
-        print("Host unreachable or too slow")
-    elif error_type == "connection_refused":
-        print("Connection refused by host")
-    elif error_type == "dns_resolution":
-        print("Could not resolve hostname")
-    else:
-        print(f"Discovery failed: {error_message}")
 ```
 
 ## Development
@@ -314,19 +272,29 @@ if not result["success"]:
 
 ```
 lib/
-├── discovery.py              # Main discovery logic
+├── discovery_client.py       # Main discovery API (new)
+├── discovery.py              # Legacy discovery functions
 ├── discovery_components/     # Core detection components
-│   ├── nmap_scanner.py      # Network scanning
+│   ├── probe_scanner.py     # Two-stage probe scanner
+│   ├── ai_detector.py       # AI-powered detection
 │   ├── binary_matcher.py    # Protocol matching
-│   ├── ai_detector.py       # AI-based detection
-│   └── config_helper.py     # Configuration handling
+│   └── nmap_scanner.py      # Network scanning
 └── core/
     └── logging.py           # Logging utilities
 
-pgdn_discovery.py            # Main entry point
+cli.py                       # CLI entry point
+__init__.py                  # Package exports
 setup.py                     # Package setup
 requirements.txt             # Dependencies
 ```
+
+### Adding New Protocols
+
+The modular design allows easy protocol addition:
+
+1. **Add signature patterns** in the appropriate discovery component
+2. **Update probe configurations** for new protocol ports/endpoints
+3. **Train AI models** with new protocol examples (optional)
 
 ### Running Tests
 
@@ -334,26 +302,46 @@ requirements.txt             # Dependencies
 python tests.py
 ```
 
-### Adding New Protocols
+## Migration Guide
 
-To add support for a new protocol, update the protocol signatures:
+### From Legacy API to New API
+
+**Old (Legacy):**
+```python
+from pgdn_discovery import discover_node
+result = discover_node("192.168.1.100")
+```
+
+**New (Recommended):**
+```python
+from pgdn_discovery import create_discovery_client
+client = create_discovery_client()
+result = client.run_discovery("192.168.1.100")
+```
+
+The new API provides:
+- Better organization tracking with `org_id`
+- Configurable discovery methods and tools
+- Structured result objects with full metadata
+- Discovery session tracking
+- Enhanced error handling
+
+### Backward Compatibility
+
+The legacy API remains available as `legacy_discover_node` for existing code:
 
 ```python
-# In your application or custom discovery instance
-new_protocol_signature = {
-    'ports': [1234, 5678],              # Known ports for this protocol
-    'endpoints': ['/api/status'],        # HTTP endpoints to check
-    'content_patterns': ['protocol_name', 'version'], # Text patterns to match
-    'headers': ['x-protocol-version']    # HTTP headers to look for
-}
+from pgdn_discovery import legacy_discover_node
+result = legacy_discover_node("192.168.1.100")  # Old format result
 ```
 
 ## Performance Considerations
 
-- **Concurrent Scanning**: Use ThreadPoolExecutor for scanning multiple hosts
-- **Timeout Management**: Set appropriate timeouts based on your network
-- **Port Selection**: Limit port scanning to known protocol ports for speed
-- **Caching**: Consider caching results for frequently scanned hosts
+- **Concurrent Discovery**: Use ThreadPoolExecutor for multiple targets
+- **Timeout Management**: Set appropriate timeouts based on network conditions
+- **Method Selection**: Choose specific methods instead of running all
+- **Caching**: Consider caching results for frequently scanned targets
+- **Rate Limiting**: Implement delays for large-scale scanning to avoid overwhelming targets
 
 ## License
 
@@ -363,9 +351,8 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 1. Fork the repository
 2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+3. Make your changes with tests
+4. Submit a pull request
 
 ## Support
 

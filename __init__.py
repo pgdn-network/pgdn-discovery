@@ -1,26 +1,46 @@
 """
-PGDN Discovery - Simple DePIN Protocol Discovery Library
+PGDN Discovery - Professional DePIN Protocol Discovery Library
 
-A lightweight library for discovering DePIN protocols on network nodes.
-Can be used both as a CLI tool and as a Python library.
+A comprehensive library for discovering DePIN protocols on network nodes
+with configurable discovery methods and analysis tools.
 
-CLI Usage:
-    pgdn-discovery --help
-    pgdn-discovery 192.168.1.100
-    pgdn-discovery example.com --json
+Usage Examples:
 
-Library Usage:
-    from pgdn_discovery import discover_node, create_discovery_client
-    
-    # Simple usage
-    result = discover_node("192.168.1.100")
-    
-    # Reusable client
-    client = create_discovery_client(timeout=60)
-    result = client.discover_node("192.168.1.100")
+# Quick discovery
+from pgdn_discovery import discover_node
+result = discover_node("192.168.1.100")
+
+# Professional discovery client
+from pgdn_discovery import create_discovery_client
+client = create_discovery_client(timeout=60, debug=True)
+result = client.run_discovery(
+    target='192.168.1.100',
+    org_id='myorg',
+    enabled_methods=['probe', 'ai'],
+    enabled_tools=['nmap', 'http_client']
+)
+
+# Targeted probe discovery
+result = client.run_probe_discovery(
+    target='192.168.1.100',
+    probes=[{"port": 9000, "path": "/metrics"}],
+    include_ai=True
+)
+
+# DePIN protocol discovery
+result = client.discover_depin_protocols('192.168.1.100')
 """
 
-from .pgdn_discovery import discover_node, create_discovery_client
+from .lib.discovery_client import PGDNDiscovery, DiscoveryResult, create_discovery_client, discover_node
 
-__version__ = "0.1.0"
-__all__ = ["discover_node", "create_discovery_client"]
+# Legacy compatibility
+from .lib.discovery import discover_node as legacy_discover_node
+
+__version__ = "1.0.0"
+__all__ = [
+    "PGDNDiscovery", 
+    "DiscoveryResult", 
+    "create_discovery_client", 
+    "discover_node",
+    "legacy_discover_node"
+]

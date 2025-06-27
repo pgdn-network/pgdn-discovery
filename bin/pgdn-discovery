@@ -6,4 +6,4 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Run the main Python script
-exec python "$PROJECT_DIR/pgdn_discovery.py" "$@" 
+exec python "$PROJECT_DIR/cli.py" "$@" 

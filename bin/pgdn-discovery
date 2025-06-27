@@ -1,9 +1,0 @@
-#!/bin/bash
-# PGDN Discovery wrapper script
-
-# Get the directory where this script is located
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-
-# Run the main Python script
-exec python "$PROJECT_DIR/cli.py" "$@" 

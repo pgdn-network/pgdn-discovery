@@ -15,7 +15,6 @@ from pgdn_discovery import create_discovery_client
 client = create_discovery_client(timeout=60, debug=True)
 result = client.run_discovery(
     target='192.168.1.100',
-    org_id='myorg',
     enabled_methods=['probe', 'ai'],
     enabled_tools=['nmap', 'http_client']
 )

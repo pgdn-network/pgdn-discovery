@@ -17,7 +17,6 @@ class DiscoveryResult:
     """Standardized discovery result format"""
     success: bool
     target: str
-    org_id: Optional[str]
     discovery_id: str
     timestamp: str
     duration_seconds: float
@@ -74,7 +73,6 @@ class PGDNDiscovery:
     
     def run_discovery(self, 
                      target: str,
-                     org_id: Optional[str] = None,
                      enabled_methods: Optional[List[str]] = None,
                      enabled_tools: Optional[List[str]] = None,
                      discovery_config: Optional[Dict[str, Any]] = None) -> DiscoveryResult:
@@ -83,7 +81,6 @@ class PGDNDiscovery:
         
         Args:
             target: Target IP address or hostname
-            org_id: Organization identifier for tracking
             enabled_methods: List of discovery methods to use
             enabled_tools: List of external tools to enable
             discovery_config: Additional configuration options
@@ -146,7 +143,6 @@ class PGDNDiscovery:
         return DiscoveryResult(
             success=success,
             target=target,
-            org_id=org_id,
             discovery_id=discovery_id,
             timestamp=time.strftime("%Y-%m-%dT%H:%M:%S"),
             duration_seconds=duration_seconds,
@@ -167,7 +163,6 @@ class PGDNDiscovery:
     def run_probe_discovery(self,
                            target: str,
                            probes: List[Dict[str, Any]],
-                           org_id: Optional[str] = None,
                            include_ai: bool = False) -> DiscoveryResult:
         """
         Run targeted probe discovery (Stage 1 + optional Stage 2 AI)
@@ -175,7 +170,6 @@ class PGDNDiscovery:
         Args:
             target: Target IP address or hostname
             probes: List of probe configurations [{"port": 9000, "path": "/metrics"}]
-            org_id: Organization identifier
             include_ai: Whether to run AI analysis (Stage 2)
             
         Returns:
@@ -189,7 +183,6 @@ class PGDNDiscovery:
         
         return self.run_discovery(
             target=target,
-            org_id=org_id,
             enabled_methods=methods,
             enabled_tools=['nmap', 'http_client'],
             discovery_config=discovery_config
@@ -197,14 +190,12 @@ class PGDNDiscovery:
     
     def discover_depin_protocols(self,
                                 target: str,
-                                org_id: Optional[str] = None,
                                 include_ai: bool = True) -> DiscoveryResult:
         """
         Discover common DePIN protocols using predefined probes
         
         Args:
             target: Target IP address or hostname
-            org_id: Organization identifier
             include_ai: Whether to use AI-powered analysis
             
         Returns:
@@ -226,7 +217,6 @@ class PGDNDiscovery:
         return self.run_probe_discovery(
             target=target,
             probes=depin_probes,
-            org_id=org_id,
             include_ai=include_ai
         )
     

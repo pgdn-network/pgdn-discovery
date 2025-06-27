@@ -9,7 +9,6 @@ A professional Python library for discovering DePIN (Decentralized Physical Infr
 - 🤖 **AI-Powered Analysis**: Advanced protocol identification using OpenAI/Anthropic APIs
 - 📊 **Confidence Scoring**: Reliable confidence levels for protocol detection
 - 🔧 **Library First**: Designed primarily as a Python library with optional CLI
-- 📈 **Organization Tracking**: Built-in support for org_id and discovery tracking
 - 🎯 **Evidence-Based**: Detailed evidence collection for protocol identification
 - 📄 **Structured Results**: Standardized result objects with full metadata
 - ⚡ **Nmap Integration**: Professional-grade port scanning capabilities
@@ -43,7 +42,6 @@ client = create_discovery_client(timeout=60, debug=True)
 # Run comprehensive discovery
 result = client.run_discovery(
     target='192.168.1.100',
-    org_id='myorg',
     enabled_methods=['probe', 'protocol', 'ai'],
     enabled_tools=['nmap', 'http_client']
 )
@@ -70,7 +68,6 @@ result = client.run_probe_discovery(
         {"port": 9000, "path": "/metrics"},
         {"port": 1234, "path": "/rpc/v0"}
     ],
-    org_id='myorg',
     include_ai=True  # Enable AI analysis
 )
 
@@ -86,7 +83,6 @@ For common DePIN protocols with predefined probes:
 # Discover common DePIN protocols
 result = client.discover_depin_protocols(
     target='192.168.1.100',
-    org_id='myorg',
     include_ai=True
 )
 
@@ -131,7 +127,6 @@ The `DiscoveryResult` object provides comprehensive information:
 class DiscoveryResult:
     success: bool                    # Whether discovery succeeded
     target: str                      # Target IP/hostname
-    org_id: Optional[str]           # Organization identifier
     discovery_id: str               # Unique discovery identifier
     timestamp: str                  # ISO timestamp
     duration_seconds: float         # Discovery duration
@@ -233,7 +228,7 @@ def discover_network_range(client, network_base="192.168.1", start=1, end=254):
     
     def discover_single(ip):
         host = f"{network_base}.{ip}"
-        return client.run_discovery(host, org_id="network_scan")
+        return client.run_discovery(host)
     
     with ThreadPoolExecutor(max_workers=20) as executor:
         hosts = range(start, end + 1)
@@ -261,8 +256,7 @@ custom_probes = [
 
 result = client.run_probe_discovery(
     target="192.168.1.100",
-    probes=custom_probes,
-    org_id="custom_discovery"
+    probes=custom_probes
 )
 ```
 
@@ -320,7 +314,6 @@ result = client.run_discovery("192.168.1.100")
 ```
 
 The new API provides:
-- Better organization tracking with `org_id`
 - Configurable discovery methods and tools
 - Structured result objects with full metadata
 - Discovery session tracking

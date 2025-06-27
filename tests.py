@@ -5,7 +5,7 @@ Basic tests for PGDN Discovery functionality
 
 import unittest
 from unittest.mock import patch, MagicMock
-from lib.discovery import NetworkProber, discover_node, COMMON_PORTS, COMMON_ENDPOINTS
+from pgdn_discovery.discovery import NetworkProber, discover_node, COMMON_PORTS, COMMON_ENDPOINTS
 
 
 class TestNetworkProber(unittest.TestCase):
@@ -101,7 +101,7 @@ class TestNetworkProber(unittest.TestCase):
 class TestConvenienceFunction(unittest.TestCase):
     """Test the discover_node convenience function"""
     
-    @patch('lib.discovery.NetworkProber')
+    @patch('pgdn_discovery.discovery.NetworkProber')
     def test_discover_node(self, mock_prober_class):
         """Test the discover_node convenience function"""
         # Mock the prober instance and its discover method

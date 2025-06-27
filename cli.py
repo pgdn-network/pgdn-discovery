@@ -11,7 +11,7 @@ import json
 import sys
 from typing import Dict, List, Any, Optional
 
-from lib.discovery_components.probe_scanner import ProbeScanner
+from pgdn_discovery.discovery_components.probe_scanner import ProbeScanner
 
 
 def parse_input_json(input_data: str) -> List[Dict[str, Any]]:

@@ -6,23 +6,26 @@ from setuptools import setup, find_packages
 
 # Read requirements from requirements.txt
 def read_requirements():
-    with open('requirements.txt', 'r') as f:
-        return [line.strip() for line in f if line.strip() and not line.startswith('#')]
+    try:
+        with open('requirements.txt', 'r') as f:
+            return [line.strip() for line in f if line.strip() and not line.startswith('#')]
+    except FileNotFoundError:
+        return []
 
 setup(
-    name="pgdn-discover",
+    name="pgdn-discovery",
     version="0.1.0",
-    description="PGDN Discover - Simple DePIN Protocol Discovery Library",
+    description="PGDN Discovery - Simple DePIN Protocol Discovery Library",
     long_description="A lightweight library for discovering DePIN protocols on network nodes.",
     author="PGDN Team",
     author_email="team@pgdn.network",
-    url="https://github.com/pgdn-network/pgdn-discover",
-    packages=['lib', 'lib.core', 'lib.discovery_components', 'lib.tools'],
-    py_modules=['cli', 'pgdn_discover_entry'],
+    url="https://github.com/pgdn-network/pgdn-discovery",
+    packages=find_packages(),
+    py_modules=['pgdn_discovery'],  # Include the root level module
     install_requires=read_requirements(),
     entry_points={
         'console_scripts': [
-            'pgdn-discover=pgdn_discover_entry:main',
+            'pgdn-discovery=pgdn_discovery:main',
         ],
     },
     classifiers=[

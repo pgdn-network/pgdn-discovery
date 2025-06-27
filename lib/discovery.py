@@ -1,383 +1,277 @@
 """
-PGDN Discover - Simple DePIN Protocol Discovery Library
+PGDN Discovery - Modular Staged Probing Pipeline
 
-A lightweight library for discovering DePIN protocols on network nodes.
-No database dependencies, agent architecture, or complex orchestration.
-Returns results as JSON objects.
+A clean, modular library for network probing with staged discovery.
+Supports both programmatic and CLI usage.
 """
 
 import json
-import subprocess
-import requests
-import logging
 import socket
-import re
+import ssl
 import time
-from typing import Dict, List, Any, Optional, Tuple
-from datetime import datetime
+from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, asdict
-from enum import Enum
-import xml.etree.ElementTree as ET
 
-# Import discovery components
-from .discovery_components.ai_detector import AIServiceDetector
-from .discovery_components.nmap_scanner import NmapScanner
-from .discovery_components.binary_matcher import HighPerformanceBinaryMatcher
-from .core.logging import setup_logging, get_logger
+# Optional HTTP functionality
+try:
+    import requests
+    HAS_REQUESTS = True
+except ImportError:
+    HAS_REQUESTS = False
 
-
-class ConfidenceLevel(Enum):
-    """Confidence levels for protocol detection"""
-    HIGH = "high"
-    MEDIUM = "medium" 
-    LOW = "low"
-    UNKNOWN = "unknown"
+# Default values used across CLI and internal calls
+COMMON_PORTS = [80, 443, 8080, 9000, 8545, 30303]
+COMMON_ENDPOINTS = ["/", "/metrics", "/health", "/rpc/v0", "/status"]
 
 
 @dataclass
 class DiscoveryResult:
-    """Result structure for protocol discovery"""
-    protocol: Optional[str]
-    confidence: str
-    confidence_score: float
-    evidence: Dict[str, Any]
-    scan_data: Dict[str, Any]
-    signature_match: Optional[Dict[str, Any]] = None
-    performance_metrics: Optional[Dict[str, Any]] = None
-    host: Optional[str] = None
-    timestamp: Optional[str] = None
+    """Standard discovery result format"""
+    ip: str
+    open_ports: List[int]
+    http_responses: Dict[int, Dict[str, Dict[str, Any]]]
+    tls_info: Dict[int, Dict[str, Any]]
+    errors: Dict[str, str]
+    timestamp: str
+    duration_seconds: float
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
         return asdict(self)
 
 
-class ProtocolDiscovery:
-    """Simple protocol discovery implementation"""
+class NetworkProber:
+    """Modular network probing with staged discovery"""
     
-    def __init__(self, timeout: int = 30, debug: bool = False):
+    def __init__(self, timeout: int = 5):
         """
-        Initialize discovery with basic configuration.
+        Initialize the prober.
         
         Args:
             timeout: Network timeout in seconds
-            debug: Enable debug logging
         """
         self.timeout = timeout
-        self.debug = debug
-        self.logger = setup_logging("DEBUG" if debug else "INFO", debug)
-        
-        # Initialize discovery components
-        try:
-            self.ai_detector = AIServiceDetector()
-            self.nmap_scanner = NmapScanner()
-            self.binary_matcher = HighPerformanceBinaryMatcher()
-        except Exception as e:
-            self.logger.warning(f"Some discovery components failed to initialize: {e}")
-            self.ai_detector = None
-            self.nmap_scanner = None
-            self.binary_matcher = None
-        
-        # Basic protocol signatures
-        self.protocol_signatures = {
-            'sui': {
-                'ports': [9000, 8080, 8084],
-                'endpoints': ['/metrics', '/health'],
-                'content_patterns': ['sui', 'consensus_epoch', 'fullnode'],
-                'headers': ['sui-rpc-version']
-            },
-            'filecoin': {
-                'ports': [1234, 3453, 8080],
-                'endpoints': ['/rpc/v0', '/api/v0/id'],
-                'content_patterns': ['lotus', 'filecoin', 'miner_id'],
-                'headers': ['lotus-gateway']
-            },
-            'ethereum': {
-                'ports': [8545, 8546, 30303],
-                'endpoints': ['/'],
-                'content_patterns': ['ethereum', 'geth', 'eth_'],
-                'rpc_methods': ['eth_blockNumber', 'net_version']
-            }
-        }
     
-    def _setup_logger(self) -> logging.Logger:
-        """Set up basic logging"""
-        logger = logging.getLogger('pgdn_discover')
-        if not logger.handlers:
-            handler = logging.StreamHandler()
-            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-            handler.setFormatter(formatter)
-            logger.addHandler(handler)
-            logger.setLevel(logging.INFO)
-        return logger
-    
-    def discover_node(self, host: str, node_id: Optional[str] = None) -> Dict[str, Any]:
+    def discover(self, ip: str, stage: str = "all", ports: Optional[List[int]] = None, 
+                paths: Optional[List[str]] = None) -> DiscoveryResult:
         """
-        Discover protocol for a given host.
+        Run staged discovery on target IP.
         
         Args:
-            host: Target host IP/hostname
-            node_id: Optional node identifier
+            ip: Target IP address
+            stage: Discovery stage ("1", "2", or "all")
+            ports: List of ports to scan (uses COMMON_PORTS if None)
+            paths: List of HTTP paths to check (uses COMMON_ENDPOINTS if None)
             
         Returns:
-            Discovery result as dictionary
+            DiscoveryResult with structured findings
         """
         start_time = time.time()
-        self.logger.info(f"Starting protocol discovery for {host}")
         
-        try:
-            # Perform network scan
-            scan_data = self._perform_network_scan(host)
-            
-            # Analyze for protocol patterns
-            result = self._analyze_protocol(host, scan_data)
-            
-            # Add metadata
-            result.host = host
-            result.timestamp = datetime.utcnow().isoformat()
-            result.performance_metrics = {
-                'discovery_time_seconds': round(time.time() - start_time, 2),
-                'scanned_ports': len(scan_data.get('open_ports', [])),
-                'http_endpoints_checked': len(scan_data.get('http_responses', {}))
-            }
-            
-            self.logger.info(f"Discovery completed for {host}: {result.protocol} ({result.confidence})")
-            
-            return {
-                'success': True,
-                'operation': 'discovery',
-                'host': host,
-                'node_id': node_id,
-                'result': result.to_dict()
-            }
-            
-        except Exception as e:
-            self.logger.error(f"Discovery failed for {host}: {str(e)}")
-            return {
-                'success': False,
-                'operation': 'discovery',
-                'host': host,
-                'node_id': node_id,
-                'error': str(e),
-                'execution_time_seconds': round(time.time() - start_time, 2)
-            }
-    
-    def _perform_network_scan(self, host: str) -> Dict[str, Any]:
-        """Perform basic network scanning"""
-        scan_data = {
-            'open_ports': [],
-            'http_responses': {},
-            'tcp_banners': {},
-            'host_info': {}
-        }
+        # Use defaults if not provided
+        if ports is None:
+            ports = COMMON_PORTS.copy()
+        if paths is None:
+            paths = COMMON_ENDPOINTS.copy()
         
-        # Basic port scan
-        common_ports = [22, 80, 443, 1234, 3453, 8080, 8084, 8545, 8546, 9000, 30303]
-        
-        for port in common_ports:
-            if self._check_port(host, port):
-                scan_data['open_ports'].append(port)
-                
-                # Get TCP banner if possible
-                banner = self._get_tcp_banner(host, port)
-                if banner:
-                    scan_data['tcp_banners'][port] = banner
-                
-                # Try HTTP if on common HTTP ports
-                if port in [80, 443, 8080, 8084, 8545]:
-                    http_data = self._check_http_endpoints(host, port)
-                    if http_data:
-                        scan_data['http_responses'][port] = http_data
-        
-        return scan_data
-    
-    def _check_port(self, host: str, port: int) -> bool:
-        """Check if a port is open"""
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(2)
-            result = sock.connect_ex((host, port))
-            sock.close()
-            return result == 0
-        except:
-            return False
-    
-    def _get_tcp_banner(self, host: str, port: int) -> Optional[str]:
-        """Get TCP banner from a port"""
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(3)
-            sock.connect((host, port))
-            
-            # Send minimal probe
-            sock.send(b'GET / HTTP/1.0\r\n\r\n')
-            banner = sock.recv(1024).decode('utf-8', errors='ignore')
-            sock.close()
-            
-            return banner.strip()[:500]  # Limit banner size
-        except:
-            return None
-    
-    def _check_http_endpoints(self, host: str, port: int) -> Dict[str, Any]:
-        """Check HTTP endpoints for protocol indicators"""
-        http_data = {}
-        
-        protocol = 'https' if port == 443 else 'http'
-        base_url = f"{protocol}://{host}:{port}"
-        
-        # Common endpoints to check
-        endpoints = ['/', '/metrics', '/health', '/rpc/v0', '/api/v0/id']
-        
-        for endpoint in endpoints:
-            try:
-                url = f"{base_url}{endpoint}"
-                response = requests.get(url, timeout=5, verify=False)
-                
-                http_data[endpoint] = {
-                    'status_code': response.status_code,
-                    'headers': dict(response.headers),
-                    'content_snippet': response.text[:1000],  # First 1000 chars
-                    'content_length': len(response.text)
-                }
-                
-            except Exception as e:
-                http_data[endpoint] = {
-                    'error': str(e)
-                }
-        
-        return http_data
-    
-    def _analyze_protocol(self, host: str, scan_data: Dict[str, Any]) -> DiscoveryResult:
-        """Analyze scan data to determine protocol"""
-        
-        protocol_scores = {}
-        evidence = {
-            'port_matches': {},
-            'content_matches': {},
-            'header_matches': {},
-            'banner_matches': {}
-        }
-        
-        # Score each protocol based on evidence
-        for protocol_name, signature in self.protocol_signatures.items():
-            score = 0
-            
-            # Check port matches
-            port_matches = []
-            for port in signature['ports']:
-                if port in scan_data['open_ports']:
-                    port_matches.append(port)
-                    score += 25  # 25 points per matching port
-            
-            if port_matches:
-                evidence['port_matches'][protocol_name] = port_matches
-            
-            # Check HTTP content patterns
-            content_matches = []
-            for port, http_data in scan_data['http_responses'].items():
-                for endpoint, response in http_data.items():
-                    if isinstance(response, dict) and 'content_snippet' in response:
-                        content = response['content_snippet'].lower()
-                        for pattern in signature['content_patterns']:
-                            if pattern.lower() in content:
-                                content_matches.append({
-                                    'port': port,
-                                    'endpoint': endpoint,
-                                    'pattern': pattern
-                                })
-                                score += 30  # 30 points per content match
-            
-            if content_matches:
-                evidence['content_matches'][protocol_name] = content_matches
-            
-            # Check headers
-            header_matches = []
-            for port, http_data in scan_data['http_responses'].items():
-                for endpoint, response in http_data.items():
-                    if isinstance(response, dict) and 'headers' in response:
-                        headers = response['headers']
-                        for header_pattern in signature.get('headers', []):
-                            for header_name, header_value in headers.items():
-                                if header_pattern.lower() in header_name.lower() or \
-                                   header_pattern.lower() in str(header_value).lower():
-                                    header_matches.append({
-                                        'port': port,
-                                        'endpoint': endpoint,
-                                        'header': header_name,
-                                        'value': str(header_value)
-                                    })
-                                    score += 40  # 40 points per header match
-            
-            if header_matches:
-                evidence['header_matches'][protocol_name] = header_matches
-            
-            # Check TCP banners
-            banner_matches = []
-            for port, banner in scan_data['tcp_banners'].items():
-                for pattern in signature['content_patterns']:
-                    if pattern.lower() in banner.lower():
-                        banner_matches.append({
-                            'port': port,
-                            'pattern': pattern,
-                            'banner_snippet': banner[:200]
-                        })
-                        score += 35  # 35 points per banner match
-            
-            if banner_matches:
-                evidence['banner_matches'][protocol_name] = banner_matches
-            
-            protocol_scores[protocol_name] = score
-        
-        # Determine best match
-        if not protocol_scores or max(protocol_scores.values()) == 0:
-            return DiscoveryResult(
-                protocol=None,
-                confidence=ConfidenceLevel.UNKNOWN.value,
-                confidence_score=0.0,
-                evidence=evidence,
-                scan_data=scan_data
-            )
-        
-        best_protocol = max(protocol_scores, key=protocol_scores.get)
-        best_score = protocol_scores[best_protocol]
-        
-        # Determine confidence level
-        if best_score >= 80:
-            confidence = ConfidenceLevel.HIGH
-        elif best_score >= 40:
-            confidence = ConfidenceLevel.MEDIUM
-        else:
-            confidence = ConfidenceLevel.LOW
-        
-        # Normalize score to 0-1 range
-        confidence_score = min(best_score / 100.0, 1.0)
-        
-        return DiscoveryResult(
-            protocol=best_protocol,
-            confidence=confidence.value,
-            confidence_score=confidence_score,
-            evidence=evidence,
-            scan_data=scan_data,
-            signature_match={
-                'protocol': best_protocol,
-                'score': best_score,
-                'all_scores': protocol_scores
-            }
+        result = DiscoveryResult(
+            ip=ip,
+            open_ports=[],
+            http_responses={},
+            tls_info={},
+            errors={},
+            timestamp=time.strftime("%Y-%m-%dT%H:%M:%S"),
+            duration_seconds=0.0
         )
+        
+        try:
+            # Stage 1: Port scan
+            if stage in ["1", "all"]:
+                result.open_ports = self._port_scan(ip, ports)
+                result.tls_info = self._get_tls_info(ip, result.open_ports)
+            
+            # Stage 2: Web scan
+            if stage in ["2", "all"]:
+                if not result.open_ports and stage == "2":
+                    # If only doing stage 2, assume all provided ports are open
+                    result.open_ports = ports
+                result.http_responses = self._web_scan(ip, result.open_ports, paths)
+        
+        except Exception as e:
+            result.errors["discovery"] = str(e)
+        
+        result.duration_seconds = round(time.time() - start_time, 2)
+        return result
+    
+    def _port_scan(self, ip: str, ports: List[int]) -> List[int]:
+        """
+        Perform TCP connect scan on specified ports.
+        
+        Args:
+            ip: Target IP address
+            ports: List of ports to scan
+            
+        Returns:
+            List of open ports
+        """
+        open_ports = []
+        
+        for port in ports:
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(self.timeout)
+                result = sock.connect_ex((ip, port))
+                sock.close()
+                
+                if result == 0:
+                    open_ports.append(port)
+                    
+            except Exception:
+                # Silently continue on port scan errors
+                continue
+        
+        return open_ports
+    
+    def _get_tls_info(self, ip: str, ports: List[int]) -> Dict[int, Dict[str, Any]]:
+        """
+        Get TLS certificate information for HTTPS ports.
+        
+        Args:
+            ip: Target IP address
+            ports: List of open ports to check
+            
+        Returns:
+            Dictionary mapping port to TLS info
+        """
+        tls_info = {}
+        
+        # Common HTTPS ports
+        https_ports = [443, 8443, 9443]
+        
+        for port in ports:
+            if port in https_ports:
+                try:
+                    context = ssl.create_default_context()
+                    context.check_hostname = False
+                    context.verify_mode = ssl.CERT_NONE
+                    
+                    with socket.create_connection((ip, port), timeout=self.timeout) as sock:
+                        with context.wrap_socket(sock, server_hostname=ip) as ssock:
+                            cert = ssock.getpeercert()
+                            tls_info[port] = {
+                                "subject": dict(x[0] for x in cert.get("subject", [])),
+                                "issuer": dict(x[0] for x in cert.get("issuer", [])),
+                                "version": cert.get("version"),
+                                "serial_number": str(cert.get("serialNumber", "")),
+                                "not_before": cert.get("notBefore"),
+                                "not_after": cert.get("notAfter")
+                            }
+                            
+                except Exception as e:
+                    tls_info[port] = {"error": str(e)}
+        
+        return tls_info
+    
+    def _web_scan(self, ip: str, ports: List[int], paths: List[str]) -> Dict[int, Dict[str, Dict[str, Any]]]:
+        """
+        Perform HTTP GET requests on specified ports and paths.
+        
+        Args:
+            ip: Target IP address
+            ports: List of ports to scan
+            paths: List of HTTP paths to check
+            
+        Returns:
+            Dictionary mapping port -> path -> response data
+        """
+        if not HAS_REQUESTS:
+            return {"error": "requests library not available for HTTP scanning"}
+        
+        responses = {}
+        
+        # Common HTTP ports
+        http_ports = [80, 8080, 8000, 9000]
+        https_ports = [443, 8443, 9443]
+        
+        for port in ports:
+            responses[port] = {}
+            
+            # Determine protocol
+            if port in https_ports:
+                protocol = "https"
+            elif port in http_ports or port in [80, 443]:  # Include standard ports
+                protocol = "https" if port == 443 else "http"
+            else:
+                # Try both protocols for unknown ports
+                protocol = "http"
+            
+            for path in paths:
+                url = f"{protocol}://{ip}:{port}{path}"
+                
+                try:
+                    response = requests.get(
+                        url, 
+                        timeout=self.timeout, 
+                        verify=False,
+                        allow_redirects=False
+                    )
+                    
+                    responses[port][path] = {
+                        "status_code": response.status_code,
+                        "headers": dict(response.headers),
+                        "body": response.text[:1000],  # First 1000 chars
+                        "body_length": len(response.text)
+                    }
+                    
+                except Exception as e:
+                    # If HTTP fails and we haven't tried HTTPS, try HTTPS
+                    if protocol == "http" and port not in http_ports:
+                        https_url = f"https://{ip}:{port}{path}"
+                        try:
+                            response = requests.get(
+                                https_url, 
+                                timeout=self.timeout, 
+                                verify=False,
+                                allow_redirects=False
+                            )
+                            
+                            responses[port][path] = {
+                                "status_code": response.status_code,
+                                "headers": dict(response.headers),
+                                "body": response.text[:1000],
+                                "body_length": len(response.text)
+                            }
+                            continue
+                            
+                        except Exception:
+                            pass
+                    
+                    responses[port][path] = {"error": str(e)}
+        
+        return responses
 
 
-def discover_node(host: str, node_id: Optional[str] = None, timeout: int = 30, debug: bool = False) -> Dict[str, Any]:
+def discover_node(ip: str, stage: str = "all", ports: Optional[List[int]] = None, 
+                 paths: Optional[List[str]] = None, timeout: int = 5) -> Dict[str, Any]:
     """
-    Convenience function for protocol discovery.
+    Convenience function for network discovery.
     
     Args:
-        host: Target host IP/hostname
-        node_id: Optional node identifier
+        ip: Target IP address
+        stage: Discovery stage ("1", "2", or "all")
+        ports: List of ports to scan (uses COMMON_PORTS if None)
+        paths: List of HTTP paths to check (uses COMMON_ENDPOINTS if None)
         timeout: Network timeout in seconds
-        debug: Enable debug logging
         
     Returns:
         Discovery result as dictionary
     """
-    discovery = ProtocolDiscovery(timeout=timeout, debug=debug)
-    return discovery.discover_node(host, node_id)
+    prober = NetworkProber(timeout=timeout)
+    result = prober.discover(ip, stage, ports, paths)
+    return result.to_dict()
+
+
+if __name__ == "__main__":
+    # Simple test
+    result = discover_node("127.0.0.1", stage="1", ports=[22, 80, 443])
+    print(json.dumps(result, indent=2))

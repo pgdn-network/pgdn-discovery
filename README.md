@@ -1,163 +1,205 @@
-# PGDN Discover
+# PGDN Discovery
 
-A lightweight Python library for discovering DePIN (Decentralized Physical Infrastructure Network) protocols on network nodes.
+A lightweight library for discovering DePIN (Decentralized Physical Infrastructure Network) protocols on network nodes. Works both as a command-line tool and as a Python library.
 
 ## Features
 
-- **Simple**: No complex agent architecture or database dependencies
-- **Fast**: Efficient network scanning and protocol detection
-- **JSON Output**: All results returned as JSON objects
-- **Protocol Detection**: Supports Sui, Filecoin, Ethereum, and custom protocols
-- **CLI Tool**: Easy-to-use command-line interface
+- 🔍 **Protocol Detection**: Automatically identify common DePIN protocols (Filecoin, Ethereum, Sui, etc.)
+- 🚀 **High Performance**: Fast network scanning with intelligent port detection
+- 📊 **Confidence Scoring**: Get confidence levels for protocol detection
+- 🔧 **Dual Interface**: Use as CLI tool or Python library
+- 📈 **Performance Metrics**: Track scanning time and coverage
+- 🎯 **Evidence-Based**: Detailed evidence collection for protocol identification
 
 ## Installation
 
 ```bash
-pip install -r requirements_simple.txt
+pip install pgdn-discovery
 ```
 
-## Quick Start
+Or install from source:
 
-### As a Library
+```bash
+git clone https://github.com/pgdn-network/pgdn-discovery.git
+cd pgdn-discovery
+pip install -e .
+```
+
+## CLI Usage
+
+### Basic Usage
+
+```bash
+# Discover protocol on a host
+pgdn-discovery 192.168.1.100
+
+# Get JSON output
+pgdn-discovery example.com --json
+
+# With custom timeout and node ID
+pgdn-discovery 10.0.0.1 --node-id abc123 --timeout 60
+
+# Enable debug logging
+pgdn-discovery 192.168.1.100 --debug
+```
+
+### CLI Options
+
+```
+pgdn-discovery --help
+
+usage: pgdn-discovery [-h] [--node-id NODE_ID] [--timeout TIMEOUT] [--json] [--debug] host
+
+PGDN Discovery - Simple DePIN Protocol Discovery Tool
+
+positional arguments:
+  host                 Target host IP address or hostname
+
+options:
+  -h, --help           show this help message and exit
+  --node-id NODE_ID    Optional node identifier
+  --timeout TIMEOUT    Network timeout in seconds (default: 30)
+  --json               Output results in JSON format
+  --debug              Enable debug logging
+```
+
+### Example CLI Output
+
+```bash
+$ pgdn-discovery 192.168.1.100
+
+🔍 Discovery Results for 192.168.1.100
+==================================================
+✅ Protocol Detected: FILECOIN
+🎯 Confidence: HIGH (0.85)
+
+📊 Evidence Summary:
+   Port Matches: 2 matches
+   Content Matches: 3 matches
+   Header Matches: 1 matches
+
+⚡ Performance:
+   Discovery time: 2.3 seconds
+   Ports scanned: 12
+   HTTP endpoints: 8
+```
+
+## Library Usage
+
+### Simple Discovery
 
 ```python
-from lib.discovery import discover_node
+from pgdn_discovery import discover_node
 
-# Discover protocol on a host
+# Basic usage
 result = discover_node("192.168.1.100")
 
-if result['success']:
-    protocol = result['result']['protocol']
-    confidence = result['result']['confidence']
-    print(f"Detected {protocol} with {confidence} confidence")
+if result["success"]:
+    protocol = result["result"]["protocol"]
+    confidence = result["result"]["confidence"]
+    score = result["result"]["confidence_score"]
+    
+    print(f"Detected: {protocol} (confidence: {confidence}, score: {score})")
 else:
     print(f"Discovery failed: {result['error']}")
 ```
 
-### CLI Usage
+### Advanced Usage with Client
 
-```bash
-# Basic discovery
-python cli_simple.py 192.168.1.100
+```python
+from pgdn_discovery import create_discovery_client
 
-# JSON output
-python cli_simple.py 192.168.1.100 --json
+# Create a reusable client
+client = create_discovery_client(timeout=60, debug=True)
 
-# With node ID and custom timeout
-python cli_simple.py example.com --node-id abc123 --timeout 60
+# Discover multiple hosts
+hosts = ["192.168.1.100", "192.168.1.101", "example.com"]
+
+for host in hosts:
+    result = client.discover_node(host)
+    if result["success"]:
+        protocol = result["result"]["protocol"]
+        print(f"{host}: {protocol}")
 ```
 
-## Output Format
+### Response Format
 
-Discovery results are returned as JSON objects:
+The library returns results in the following format:
 
-```json
+```python
 {
-  "success": true,
-  "operation": "discovery",
-  "host": "192.168.1.100",
-  "node_id": null,
-  "result": {
-    "protocol": "sui",
-    "confidence": "high",
-    "confidence_score": 0.85,
-    "evidence": {
-      "port_matches": {
-        "sui": [9000, 8080]
-      },
-      "content_matches": {
-        "sui": [
-          {
-            "port": 9000,
-            "endpoint": "/metrics",
-            "pattern": "consensus_epoch"
-          }
-        ]
-      }
-    },
-    "scan_data": {
-      "open_ports": [22, 8080, 9000],
-      "http_responses": {...},
-      "tcp_banners": {...}
-    },
-    "performance_metrics": {
-      "discovery_time_seconds": 2.45,
-      "scanned_ports": 3,
-      "http_endpoints_checked": 8
-    },
+    "success": True,
+    "operation": "discovery",
     "host": "192.168.1.100",
-    "timestamp": "2025-06-25T10:30:00Z"
-  }
+    "node_id": "optional-node-id",
+    "result": {
+        "protocol": "filecoin",           # Detected protocol or None
+        "confidence": "high",             # high, medium, low, unknown
+        "confidence_score": 0.85,         # 0.0 to 1.0
+        "evidence": {
+            "port_matches": {...},        # Evidence from port scanning
+            "content_matches": {...},     # Evidence from HTTP content
+            "header_matches": {...},      # Evidence from HTTP headers
+            "banner_matches": {...}       # Evidence from TCP banners
+        },
+        "scan_data": {
+            "open_ports": [22, 80, 1234],
+            "http_responses": {...},
+            "tcp_banners": {...}
+        },
+        "performance_metrics": {
+            "discovery_time_seconds": 2.3,
+            "scanned_ports": 12,
+            "http_endpoints_checked": 8
+        },
+        "host": "192.168.1.100",
+        "timestamp": "2024-01-01T12:00:00.000000"
+    }
 }
 ```
 
 ## Supported Protocols
 
-- **Sui**: Detects Sui blockchain nodes
-- **Filecoin**: Detects Filecoin/Lotus nodes  
-- **Ethereum**: Detects Ethereum nodes
+Currently detects the following DePIN protocols:
 
-## Protocol Detection
+- **Filecoin**: Lotus nodes, miners, and gateways
+- **Ethereum**: Geth, consensus clients, and RPC endpoints  
+- **Sui**: Full nodes and validators
 
-The library uses multiple detection methods:
-
-1. **Port Scanning**: Checks for protocol-specific ports
-2. **HTTP Endpoints**: Tests common API endpoints
-3. **Content Analysis**: Searches for protocol-specific patterns
-4. **Header Analysis**: Examines HTTP headers
-5. **Banner Grabbing**: Analyzes TCP service banners
-
-## Configuration
-
-The discovery engine can be configured:
-
-```python
-from lib.discovery import ProtocolDiscovery
-
-# Custom timeout
-discovery = ProtocolDiscovery(timeout=60)
-result = discovery.discover_node("192.168.1.100")
-```
+More protocols will be added based on community needs.
 
 ## Development
 
-### Project Structure
+### Running from Source
 
-```
-lib/
-├── discovery.py      # Main discovery logic
-├── __init__.py       # Package initialization
+```bash
+# Run as module
+python -m pgdn_discovery 192.168.1.100
 
-cli_simple.py         # Command-line interface
-setup_simple.py       # Package setup
-requirements_simple.txt # Dependencies
+# Run directly
+python pgdn_discovery.py 192.168.1.100
 ```
 
-### Adding New Protocols
+### Testing
 
-To add support for a new protocol, update the `protocol_signatures` in `lib/discovery.py`:
+```bash
+# Test CLI
+pgdn-discovery --help
 
-```python
-'my_protocol': {
-    'ports': [1234, 5678],
-    'endpoints': ['/api/status'],
-    'content_patterns': ['my_protocol', 'version'],
-    'headers': ['my-protocol-version']
-}
+# Test library import
+python -c "from pgdn_discovery import discover_node; print('Import successful')"
 ```
-
-## License
-
-MIT License - see LICENSE file for details.
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Support
 
-For issues and questions, please open an issue on GitHub.
+- 📧 Email: team@pgdn.network
+- 🐛 Issues: [GitHub Issues](https://github.com/pgdn-network/pgdn-discovery/issues)
+- 📖 Documentation: [GitHub Wiki](https://github.com/pgdn-network/pgdn-discovery/wiki)

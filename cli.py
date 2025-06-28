@@ -94,7 +94,6 @@ def process_protocols(ip: str, protocols: List[Dict[str, Any]], timeout: int = 5
         
         # Group results by protocol
         protocol_results = {}
-        successful_probes = 0
         
         for i, probe_data in enumerate(probe_result.data):
             protocol_name = all_probes[i]['protocol']
@@ -118,13 +117,16 @@ def process_protocols(ip: str, protocols: List[Dict[str, Any]], timeout: int = 5
             # Add error if present
             if probe_data.error:
                 result_entry["error"] = probe_data.error
-            else:
-                successful_probes += 1
             
             protocol_results[protocol_name]["results"].append(result_entry)
         
         # Convert to list format
         data = list(protocol_results.values())
+        
+        # Use ProbeScanner's accurate count: successful = total - failed
+        total_probes = probe_result.meta.get("probe_count", len(all_probes))
+        failed_probes = probe_result.meta.get("failed", 0)
+        successful_probes = total_probes - failed_probes
         
         return {
             "data": data,

@@ -13,6 +13,7 @@ import ssl
 from typing import Dict, List, Any, Optional, Union
 from dataclasses import dataclass
 import xml.etree.ElementTree as ET
+from .protocol_signatures import ProtocolSignatureMatcher
 
 
 @dataclass
@@ -25,6 +26,7 @@ class ProbeResult:
     headers: Dict[str, str]
     body: str
     matched_banners: List[str]
+    protocol_matches: List[Dict[str, Any]]  # New field for signature matches
     error: Optional[str]
     tls_info: Optional[Dict[str, Any]]
 
@@ -48,6 +50,8 @@ class ProbeScanner:
             'theta', 'akash', 'helium', 'solana', 'avalanche',
             'rpc', 'consensus', 'validator', 'blockchain', 'node'
         ]
+        # Initialize protocol signature matcher
+        self.signature_matcher = ProtocolSignatureMatcher()
     
     def probe_ports_with_nmap(self, ip: str, ports: List[int]) -> Dict[int, str]:
         """
@@ -143,6 +147,7 @@ class ProbeScanner:
                     headers={},
                     body="",
                     matched_banners=[],
+                    protocol_matches=[],
                     error="Invalid port specified",
                     tls_info=None
                 ))
@@ -161,6 +166,7 @@ class ProbeScanner:
                     headers={},
                     body="",
                     matched_banners=[],
+                    protocol_matches=[],
                     error="connection refused" if port_status == "closed" else f"port {port_status}",
                     tls_info=None
                 ))
@@ -208,8 +214,27 @@ class ProbeScanner:
                 if protocol == 'https':
                     tls_info = self._get_tls_info(ip, port)
                 
-                # Match banners in response
+                # Match banners in response (legacy)
                 matched_banners = self._match_banners(response.text, response.headers)
+                
+                # Match protocol signatures (new advanced method)
+                probe_data = [{
+                    'port': port,
+                    'path': path,
+                    'status_code': response.status_code,
+                    'headers': dict(response.headers),
+                    'body': response.text
+                }]
+                protocol_matches = self.signature_matcher.match_protocol_signatures(probe_data)
+                protocol_match_data = [
+                    {
+                        'protocol': match.protocol,
+                        'confidence': match.confidence,
+                        'signature': match.signature_name,
+                        'evidence': match.evidence
+                    }
+                    for match in protocol_matches
+                ]
                 
                 return ProbeResult(
                     ip=ip,
@@ -219,6 +244,7 @@ class ProbeScanner:
                     headers=dict(response.headers),
                     body=response.text,
                     matched_banners=matched_banners,
+                    protocol_matches=protocol_match_data,
                     error=None,
                     tls_info=tls_info
                 )
@@ -234,6 +260,7 @@ class ProbeScanner:
                         headers={},
                         body="",
                         matched_banners=[],
+                        protocol_matches=[],
                         error=str(e),
                         tls_info=None
                     )
@@ -248,6 +275,7 @@ class ProbeScanner:
             headers={},
             body="",
             matched_banners=[],
+            protocol_matches=[],
             error="unknown error",
             tls_info=None
         )
@@ -301,6 +329,7 @@ class ProbeScanner:
                 "headers": probe_result.headers,
                 "body": probe_result.body,
                 "matched_banners": probe_result.matched_banners,
+                "protocol_matches": probe_result.protocol_matches,
                 "error": probe_result.error,
                 "tls_info": probe_result.tls_info
             })

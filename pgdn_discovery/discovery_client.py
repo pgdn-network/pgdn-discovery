@@ -281,24 +281,42 @@ class PGDNDiscovery:
         if 'probe' in raw_data:
             probe_data = raw_data['probe'].get('data', [])
             banner_matches = []
+            protocol_signature_matches = []
             
             for probe_result in probe_data:
+                # Legacy banner matching
                 banners = probe_result.get('matched_banners', [])
                 if banners:
                     banner_matches.extend(banners)
                     for banner in banners:
                         if banner not in protocols_detected:
                             protocols_detected.append(banner)
-                            confidence_scores[banner] = 0.7  # Medium confidence
+                            confidence_scores[banner] = 0.5  # Lower confidence for banner matches
+                
+                # New protocol signature matching
+                protocol_matches = probe_result.get('protocol_matches', [])
+                for match in protocol_matches:
+                    protocol = match.get('protocol')
+                    confidence = match.get('confidence', 0.0)
+                    
+                    if protocol and protocol not in protocols_detected:
+                        protocols_detected.append(protocol)
+                        confidence_scores[protocol] = confidence
+                    elif protocol and confidence > confidence_scores.get(protocol, 0.0):
+                        # Update with higher confidence
+                        confidence_scores[protocol] = confidence
+                    
+                    protocol_signature_matches.append(match)
             
             evidence['banner_matches'] = banner_matches
+            evidence['protocol_signature_matches'] = protocol_signature_matches
         
         # Determine best protocol match
         best_protocol = None
         best_confidence = 0.0
         
         if protocols_detected:
-            # Simple heuristic: pick the protocol with highest confidence
+            # Pick the protocol with highest confidence
             for protocol, conf in confidence_scores.items():
                 if conf > best_confidence:
                     best_protocol = protocol
@@ -310,7 +328,7 @@ class PGDNDiscovery:
             'detected_protocols': protocols_detected,
             'confidence_scores': confidence_scores,
             'evidence': evidence,
-            'analysis_method': 'protocol_signature'
+            'analysis_method': 'signature_and_banner'
         }
     
     def _run_ai_discovery(self, target: str, raw_data: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:

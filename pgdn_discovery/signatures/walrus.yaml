@@ -1,0 +1,40 @@
+name: "Walrus Network"
+network_type: "storage"
+default_ports: [8080, 31415]
+
+probes:
+  - name: WALRUS_API_VERSION
+    payload: "GET /api/v1/version HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+    ports: [8080, 31415]
+    requires_ssl: false
+  
+  - name: WALRUS_STORAGE_STATUS
+    payload: "GET /api/v1/storage/status HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+    ports: [8080, 31415]
+    requires_ssl: false
+  
+  - name: WALRUS_NODE_INFO
+    payload: "GET /status HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+    ports: [8080, 31415]
+    requires_ssl: false
+
+signatures:
+  - label: "Walrus Storage Node"
+    regex: '"walrus".*"version":\s*"(?P<ver>[^"]+)"'
+    version_group: ver
+  
+  - label: "Walrus API"
+    regex: 'walrus[_-]?(storage|node|daemon).*version'
+    version_group: ""
+  
+  - label: "Walrus Storage API"
+    regex: '/api/v\d+/storage.*walrus|walrus.*storage.*api'
+    version_group: ""
+  
+  - label: "Walrus Headers"
+    regex: 'x-walrus-|walrus-version|walrus-node-id'
+    version_group: ""
+  
+  - label: "Walrus Network ID"
+    regex: '"network":\s*"walrus"|"protocol":\s*"walrus"'
+    version_group: ""

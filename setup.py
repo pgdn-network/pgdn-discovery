@@ -14,7 +14,7 @@ def read_requirements():
 
 setup(
     name="pgdn-discovery",
-    version="0.2.0",
+    version="0.2.1",
     description="PGDN Discovery - Simple DePIN Protocol Discovery Library",
     long_description="A lightweight library for discovering DePIN protocols on network nodes.",
     author="PGDN Team",
@@ -22,7 +22,7 @@ setup(
     url="https://github.com/pgdn-network/pgdn-discovery",
     packages=find_packages(),
     package_data={
-        'pgdn_discovery': ['signatures/*.yaml', 'signatures/*.yml'],
+        'pgdn_discovery': ['*.yaml', '*.yml'],
     },
     include_package_data=True,
     install_requires=read_requirements(),

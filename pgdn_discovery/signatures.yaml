@@ -8,3 +8,9 @@ protocols:
     name: "Ethereum"
     rpc_method: "eth_chainId"
     ports: [8545, 443, 80]
+  
+  walrus:
+    name: "Walrus"
+    api_method: "getValidators"
+    ports: [443]
+    http_method: "GET"

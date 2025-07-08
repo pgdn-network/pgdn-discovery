@@ -14,7 +14,7 @@ def read_requirements():
 
 setup(
     name="pgdn-discovery",
-    version="0.1.1",
+    version="0.2.0",
     description="PGDN Discovery - Simple DePIN Protocol Discovery Library",
     long_description="A lightweight library for discovering DePIN protocols on network nodes.",
     author="PGDN Team",

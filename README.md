@@ -1,10 +1,10 @@
 # PGDN Discovery
 
-A fast, simple Python library for discovering DePIN (Decentralized Physical Infrastructure Network) protocols on network nodes using RPC-based detection. Built for speed and reliability with early exit optimization.
+A fast, simple Python library for discovering DePIN (Decentralized Physical Infrastructure Network) protocols on network nodes using both RPC-based and HTTP-based detection. Built for speed and reliability with early exit optimization.
 
 ## Features
 
-- 🚀 **Fast RPC Detection**: Direct JSON-RPC calls for instant protocol identification
+- 🚀 **Fast Protocol Detection**: Direct JSON-RPC calls and HTTP requests for instant protocol identification
 - 🎯 **Early Exit**: Stops scanning immediately upon finding protocols (max 3 supported)
 - 📊 **Structured Results**: Consistent JSON format with data arrays and error blocks
 - 🔧 **Easy Protocol Addition**: Simple YAML configuration for new protocols
@@ -31,13 +31,13 @@ pip install -e .
 ### Basic Protocol Discovery
 
 ```python
-from pgdn_discovery import NetworkProber
+from pgdn_discovery import ProtocolDiscoverer
 
-# Create prober instance
-prober = NetworkProber(timeout=10)
+# Create discoverer instance
+discoverer = ProtocolDiscoverer(timeout=10)
 
 # Discover all protocols on a node
-result = prober.discover("fullnode.mainnet.sui.io")
+result = discoverer.discover("fullnode.mainnet.sui.io")
 print(f"Found protocols: {result.open_ports}")
 print(f"HTTP responses: {result.http_responses}")
 ```
@@ -59,10 +59,10 @@ print(f"Sui discovery: {result}")
 ### Working with Results
 
 ```python
-from pgdn_discovery import NetworkProber
+from pgdn_discovery import ProtocolDiscoverer
 
-prober = NetworkProber(timeout=10)
-result = prober.discover("fullnode.mainnet.sui.io")
+discoverer = ProtocolDiscoverer(timeout=10)
+result = discoverer.discover("fullnode.mainnet.sui.io")
 
 # Access discovery results
 print(f"Target: {result.ip}")
@@ -146,24 +146,41 @@ protocols:
     name: "Ethereum"
     rpc_method: "eth_chainId"
     ports: [8545, 443, 80]
+  
+  walrus:
+    name: "Walrus"
+    api_method: "getValidators"
+    ports: [443]
+    http_method: "GET"
 ```
 
 ### Adding New Protocols
 
 Add new protocol definitions to the `signatures.yaml` file:
 
+**For RPC-based protocols:**
 ```yaml
 protocols:
-  your_protocol:
-    name: "Your Protocol"
+  your_rpc_protocol:
+    name: "Your RPC Protocol"
     rpc_method: "your_rpc_method"
     ports: [8080, 443, 9000]
+```
+
+**For HTTP-based protocols:**
+```yaml
+protocols:
+  your_http_protocol:
+    name: "Your HTTP Protocol"
+    api_method: "your_api_method"
+    ports: [443, 8080]
+    http_method: "GET"
 ```
 
 The system will automatically:
 - Validate protocol names when using `--protocol` filter
 - Test ports in the specified order (probability-based)
-- Make JSON-RPC calls to detect the protocol
+- Make JSON-RPC calls (for `rpc_method`) or HTTP requests (for `api_method`) to detect the protocol
 - Return results immediately when found
 
 ## Discovery Result Format
@@ -188,10 +205,14 @@ class DiscoveryResult:
 
 Currently supports these DePIN protocols:
 
+**RPC-based protocols:**
 - **Sui** - Full nodes and validators (`sui_getChainIdentifier`)
 - **Ethereum** - Execution clients (`eth_chainId`)
 
-More protocols can be easily added by updating the `signatures.yaml` file with appropriate RPC methods and ports.
+**HTTP-based protocols:**
+- **Walrus** - Aggregator nodes (`getValidators` API)
+
+More protocols can be easily added by updating the `signatures.yaml` file with appropriate RPC methods (for RPC-based) or API methods (for HTTP-based) and ports.
 
 ## Performance Features
 
@@ -201,19 +222,19 @@ More protocols can be easily added by updating the `signatures.yaml` file with a
 - Immediate return on successful RPC response
 
 ### Efficient Scanning
-- Direct RPC calls (no port scanning or banner grabbing)
+- Direct RPC calls and HTTP requests (no port scanning or banner grabbing)
 - Concurrent protocol testing
 - Configurable timeouts for different network conditions
 
 ### Example Performance
 ```python
 import time
-from pgdn_discovery import NetworkProber
+from pgdn_discovery import ProtocolDiscoverer
 
-prober = NetworkProber(timeout=5)
+discoverer = ProtocolDiscoverer(timeout=5)
 
 start_time = time.time()
-result = prober.discover("fullnode.mainnet.sui.io")
+result = discoverer.discover("fullnode.mainnet.sui.io")
 end_time = time.time()
 
 print(f"Discovery completed in {end_time - start_time:.2f}s")
@@ -242,7 +263,7 @@ pgdn_discovery/
 ├── __init__.py          # Main package exports
 ├── __main__.py          # Module execution entry point
 ├── cli.py               # CLI implementation
-├── discovery.py         # Core NetworkProber class
+├── discovery.py         # Core ProtocolDiscoverer class
 └── signatures.yaml      # Protocol definitions
 
 cli.py                   # CLI wrapper script
@@ -251,10 +272,10 @@ setup.py                 # Package configuration
 
 ## API Reference
 
-### NetworkProber Class
+### ProtocolDiscoverer Class
 
 ```python
-class NetworkProber:
+class ProtocolDiscoverer:
     def __init__(self, timeout: int = 5):
         """Initialize with custom timeout"""
         
@@ -281,10 +302,10 @@ def discover_protocols(ip: str, timeout: int = 5, protocol_filter: Optional[str]
 The system handles errors gracefully:
 
 ```python
-from pgdn_discovery import NetworkProber
+from pgdn_discovery import ProtocolDiscoverer
 
-prober = NetworkProber(timeout=5)
-result = prober.discover("invalid.host.com")
+discoverer = ProtocolDiscoverer(timeout=5)
+result = discoverer.discover("invalid.host.com")
 
 if result.errors:
     print(f"Discovery errors: {result.errors}")

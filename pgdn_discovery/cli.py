@@ -11,7 +11,7 @@ import sys
 import os
 from typing import Dict, List, Any, Optional
 
-from .discovery import NetworkProber
+from .discovery import ProtocolDiscoverer
 
 
 def discover_protocols(ip: str, timeout: int = 5, protocol_filter: Optional[str] = None, 
@@ -20,8 +20,8 @@ def discover_protocols(ip: str, timeout: int = 5, protocol_filter: Optional[str]
     
     try:
         # Run simple RPC-based discovery
-        prober = NetworkProber(timeout=timeout)
-        discovery_result = prober.discover(ip, stage="all", protocol_filter=protocol_filter)
+        discoverer = ProtocolDiscoverer(timeout=timeout)
+        discovery_result = discoverer.discover(ip, stage="all", protocol_filter=protocol_filter)
         
         # Check for errors first
         if discovery_result.errors:

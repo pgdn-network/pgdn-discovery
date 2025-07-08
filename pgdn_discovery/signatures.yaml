@@ -1,0 +1,10 @@
+protocols:
+  sui:
+    name: "Sui"
+    rpc_method: "sui_getChainIdentifier"
+    ports: [443, 9000, 9184]
+  
+  ethereum:
+    name: "Ethereum"
+    rpc_method: "eth_chainId"
+    ports: [8545, 443, 80]

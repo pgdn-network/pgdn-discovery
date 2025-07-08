@@ -1,3 +1,0 @@
-name: "Sui"
-rpc_method: "sui_getChainIdentifier"
-ports: [443, 9000, 9184]

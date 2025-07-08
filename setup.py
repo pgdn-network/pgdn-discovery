@@ -21,7 +21,6 @@ setup(
     author_email="team@pgdn.network",
     url="https://github.com/pgdn-network/pgdn-discovery",
     packages=find_packages(),
-    py_modules=['cli'],  # Include the root level module
     package_data={
         'pgdn_discovery': ['signatures/*.yaml', 'signatures/*.yml'],
     },
@@ -29,9 +28,10 @@ setup(
     install_requires=read_requirements(),
     entry_points={
         'console_scripts': [
-            'pgdn-discovery=cli:main',
+            'pgdn-discovery=pgdn_discovery:main',
         ],
     },
+    py_modules=['cli'],
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",

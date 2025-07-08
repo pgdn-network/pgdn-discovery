@@ -5,7 +5,7 @@ This allows the package to be run with:
 python -m pgdn_discovery
 """
 
-from pgdn_discovery import main
+from cli import main
 
 if __name__ == "__main__":
     main()

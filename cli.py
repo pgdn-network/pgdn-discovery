@@ -2,138 +2,153 @@
 """
 PGDN Discovery CLI
 
-Two-stage discovery tool that accepts JSON protocol definitions
-and probes specific port/path combinations.
+Fast multi-stage discovery tool with automatic protocol detection.
 """
 
 import argparse
 import json
 import sys
+import os
 from typing import Dict, List, Any, Optional
 
-from pgdn_discovery.discovery_components.probe_scanner import ProbeScanner
+from pgdn_discovery.discovery import NetworkProber
+from pgdn_discovery.discovery_components.protocol_signatures import ProtocolSignatureMatcher
+from pgdn_discovery.discovery_components.ai_detector import AIServiceDetector
 
 
-def parse_input_json(input_data: str) -> List[Dict[str, Any]]:
-    """Parse input JSON protocol definitions"""
-    try:
-        data = json.loads(input_data)
-        if not isinstance(data, list):
-            raise ValueError("Input must be a JSON array of protocol definitions")
-        return data
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON input: {e}")
+def get_all_ports_and_paths_from_signatures(signature_matcher: ProtocolSignatureMatcher, 
+                                           protocol_filter: Optional[str] = None) -> tuple[List[int], List[str]]:
+    """Extract all ports and paths from loaded protocol signatures"""
+    all_ports = set()
+    all_paths = set()
+    
+    for protocol_name, signature in signature_matcher.protocol_signatures.items():
+        # Apply protocol filter if specified
+        if protocol_filter and protocol_name != protocol_filter:
+            continue
+            
+        all_ports.update(signature.ports)
+        all_paths.update(signature.paths)
+    
+    return sorted(list(all_ports)), sorted(list(all_paths))
 
 
-def validate_protocol_definition(protocol_def: Dict[str, Any]) -> bool:
-    """Validate a protocol definition structure"""
-    if not isinstance(protocol_def, dict):
-        return False
-    
-    if 'protocol' not in protocol_def or 'results' not in protocol_def:
-        return False
-    
-    if not isinstance(protocol_def['results'], list):
-        return False
-    
-    for result in protocol_def['results']:
-        if not isinstance(result, dict):
-            return False
-        if 'port' not in result or 'path' not in result:
-            return False
-    
-    return True
-
-
-def process_protocols(ip: str, protocols: List[Dict[str, Any]], timeout: int = 5) -> Dict[str, Any]:
-    """Process protocol definitions and return structured results"""
-    
-    # Validate all protocol definitions
-    for protocol_def in protocols:
-        if not validate_protocol_definition(protocol_def):
-            return {
-                "data": [],
-                "error": f"Invalid protocol definition: {protocol_def}",
-                "meta": {
-                    "protocols_attempted": 0,
-                    "total_successful_probes": 0
-                },
-                "result_type": "error"
-            }
-    
-    scanner = ProbeScanner(timeout=timeout)
-    
-    # Prepare probes list
-    all_probes = []
-    for protocol_def in protocols:
-        for result in protocol_def['results']:
-            probe = {
-                'protocol': protocol_def['protocol'],
-                'port': result['port'],
-                'path': result['path']
-            }
-            # Include expected body if provided (for validation)
-            if 'body' in result:
-                probe['expected_body'] = result['body']
-            all_probes.append(probe)
+def discover_protocols(ip: str, timeout: int = 5, protocol_filter: Optional[str] = None, 
+                      ai_fallback: bool = False) -> Dict[str, Any]:
+    """Discover protocols using fast multi-stage discovery with signature matching"""
     
     try:
-        # Run the probe scanner
-        probe_result = scanner.probe_services(ip, all_probes)
+        # Load signature matcher
+        signature_matcher = ProtocolSignatureMatcher()
         
-        if probe_result.error:
+        if not signature_matcher.protocol_signatures:
             return {
                 "data": [],
-                "error": probe_result.error,
-                "meta": {
-                    "protocols_attempted": len(protocols),
-                    "total_successful_probes": 0
-                },
+                "error": "No protocol signatures loaded",
+                "meta": {"protocols_available": 0, "open_ports": 0},
                 "result_type": "error"
             }
         
-        # Group results by protocol
-        protocol_results = {}
+        # Get all ports and paths from signatures
+        ports, paths = get_all_ports_and_paths_from_signatures(signature_matcher, protocol_filter)
         
-        for i, probe_data in enumerate(probe_result.data):
-            protocol_name = all_probes[i]['protocol']
-            
-            if protocol_name not in protocol_results:
-                protocol_results[protocol_name] = {
-                    "protocol": protocol_name,
-                    "results": []
-                }
-            
-            # Build result entry
-            result_entry = {
-                "port": probe_data.port,
-                "path": probe_data.path,
-                "status_code": probe_data.status_code,
-                "headers": probe_data.headers,
-                "body": probe_data.body,
-                "tls_info": probe_data.tls_info
+        if not ports:
+            return {
+                "data": [],
+                "error": f"No ports found for protocol filter: {protocol_filter}" if protocol_filter else "No ports found in signatures",
+                "meta": {"protocols_available": len(signature_matcher.protocol_signatures), "open_ports": 0},
+                "result_type": "error"
             }
-            
-            # Add error if present
-            if probe_data.error:
-                result_entry["error"] = probe_data.error
-            
-            protocol_results[protocol_name]["results"].append(result_entry)
         
-        # Convert to list format
-        data = list(protocol_results.values())
+        # Run fast discovery
+        prober = NetworkProber(timeout=timeout)
+        discovery_result = prober.discover(ip, stage="all", ports=ports, paths=paths)
         
-        # Use ProbeScanner's accurate count: successful = total - failed
-        total_probes = probe_result.meta.get("probe_count", len(all_probes))
-        failed_probes = probe_result.meta.get("failed", 0)
-        successful_probes = total_probes - failed_probes
+        if not discovery_result.open_ports:
+            return {
+                "data": [],
+                "error": None,
+                "meta": {
+                    "protocols_available": len(signature_matcher.protocol_signatures),
+                    "open_ports": 0,
+                    "scanned_ports": len(ports),
+                    "duration_seconds": discovery_result.duration_seconds
+                },
+                "result_type": "no_open_ports"
+            }
+        
+        # Convert HTTP responses to probe format for signature matching
+        probe_results = []
+        for port, paths_data in discovery_result.http_responses.items():
+            for path, response_data in paths_data.items():
+                if isinstance(response_data, dict) and 'error' not in response_data:
+                    probe_results.append({
+                        'port': port,
+                        'path': path,
+                        'status_code': response_data.get('status_code', 0),
+                        'headers': response_data.get('headers', {}),
+                        'body': response_data.get('body', '')
+                    })
+        
+        # Match signatures
+        protocol_matches = signature_matcher.match_protocol_signatures(probe_results)
+        
+        # Optional AI fallback
+        ai_results = []
+        if ai_fallback and (not protocol_matches or max(m.confidence for m in protocol_matches) < 0.7):
+            try:
+                ai_detector = AIServiceDetector()
+                if ai_detector.openai_api_key or ai_detector.anthropic_api_key:
+                    # Prepare scan data for AI
+                    scan_data = {
+                        'nmap': {
+                            'ports': discovery_result.open_ports,
+                            'services': {}
+                        },
+                        'probes': {f"{p['port']}{p['path']}": p for p in probe_results}
+                    }
+                    
+                    ai_protocol, ai_confidence, ai_evidence = ai_detector.analyze_service_with_ai(ip, scan_data, 1)
+                    if ai_protocol:
+                        ai_results.append({
+                            'protocol': ai_protocol,
+                            'confidence': ai_confidence,
+                            'source': 'ai_fallback',
+                            'evidence': ai_evidence
+                        })
+            except Exception as e:
+                # AI fallback failed, continue without it
+                pass
+        
+        # Format results
+        detected_protocols = []
+        for match in protocol_matches:
+            detected_protocols.append({
+                'protocol': match.protocol,
+                'confidence': match.confidence,
+                'signature': match.signature_name,
+                'evidence': match.evidence,
+                'source': 'signature_match'
+            })
+        
+        # Add AI results
+        detected_protocols.extend(ai_results)
         
         return {
-            "data": data,
+            "data": {
+                "ip": ip,
+                "open_ports": discovery_result.open_ports,
+                "detected_protocols": detected_protocols,
+                "http_responses": discovery_result.http_responses
+            },
             "error": None,
             "meta": {
-                "protocols_attempted": len(protocols),
-                "total_successful_probes": successful_probes
+                "protocols_available": len(signature_matcher.protocol_signatures),
+                "open_ports": len(discovery_result.open_ports),
+                "scanned_ports": len(ports),
+                "detected_protocols": len(detected_protocols),
+                "duration_seconds": discovery_result.duration_seconds,
+                "ai_fallback_used": bool(ai_results)
             },
             "result_type": "success"
         }
@@ -142,10 +157,7 @@ def process_protocols(ip: str, protocols: List[Dict[str, Any]], timeout: int = 5
         return {
             "data": [],
             "error": str(e),
-            "meta": {
-                "protocols_attempted": len(protocols),
-                "total_successful_probes": 0
-            },
+            "meta": {"protocols_available": 0, "open_ports": 0},
             "result_type": "error"
         }
 
@@ -154,44 +166,39 @@ def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
         prog='pgdn-discovery',
-        description="PGDN Discovery - Two-stage Protocol Probing",
+        description="PGDN Discovery - Fast Multi-stage Protocol Discovery",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # From file
-  pgdn-discovery probe 192.168.1.100 --input protocols.json
+  # Discover all protocols
+  pgdn-discovery discover 192.168.1.100
   
-  # From stdin
-  echo '[{"protocol":"sui","results":[{"port":9000,"path":"/metrics"}]}]' | pgdn-discovery probe 192.168.1.100
+  # Discover only Sui protocol
+  pgdn-discovery discover 192.168.1.100 --protocol sui
+  
+  # With AI fallback for unknown protocols
+  pgdn-discovery discover 192.168.1.100 --ai-fallback
   
   # With custom timeout
-  pgdn-discovery probe 192.168.1.100 --input protocols.json --timeout 10
-
-Input JSON format:
-[
-  {
-    "protocol": "sui",
-    "results": [
-      {
-        "port": 9000,
-        "path": "/metrics"
-      }
-    ]
-  }
-]
+  pgdn-discovery discover 192.168.1.100 --timeout 10
         """
     )
     
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
     
-    # Probe command
-    probe_parser = subparsers.add_parser('probe', help='Run protocol probing')
-    probe_parser.add_argument('ip', help='Target IP address')
-    probe_parser.add_argument(
-        '--input', '-i',
-        help='Input JSON file with protocol definitions (use "-" for stdin)'
+    # Discover command (new primary command)
+    discover_parser = subparsers.add_parser('discover', help='Auto-discover protocols using signatures')
+    discover_parser.add_argument('ip', help='Target IP address')
+    discover_parser.add_argument(
+        '--protocol',
+        help='Only scan for specific protocol (e.g., sui, filecoin)'
     )
-    probe_parser.add_argument(
+    discover_parser.add_argument(
+        '--ai-fallback',
+        action='store_true',
+        help='Use AI detection when signature matching fails (requires API keys)'
+    )
+    discover_parser.add_argument(
         '--timeout',
         type=int,
         default=5,
@@ -204,33 +211,15 @@ Input JSON format:
         parser.print_help()
         sys.exit(1)
     
-    if args.command == 'probe':
+    if args.command == 'discover':
         try:
-            # Read input JSON
-            if args.input:
-                if args.input == '-':
-                    input_data = sys.stdin.read()
-                else:
-                    with open(args.input, 'r') as f:
-                        input_data = f.read()
-            else:
-                # Try reading from stdin
-                if not sys.stdin.isatty():
-                    input_data = sys.stdin.read()
-                else:
-                    print(json.dumps({
-                        "data": [],
-                        "error": "No input provided. Use --input file.json or pipe JSON to stdin",
-                        "meta": {"protocols_attempted": 0, "total_successful_probes": 0},
-                        "result_type": "error"
-                    }), file=sys.stderr)
-                    sys.exit(1)
-            
-            # Parse protocol definitions
-            protocols = parse_input_json(input_data.strip())
-            
-            # Process protocols
-            result = process_protocols(args.ip, protocols, args.timeout)
+            # Run discovery
+            result = discover_protocols(
+                args.ip, 
+                timeout=args.timeout,
+                protocol_filter=args.protocol,
+                ai_fallback=args.ai_fallback
+            )
             
             # Output result
             print(json.dumps(result, indent=2))
@@ -242,8 +231,8 @@ Input JSON format:
         except KeyboardInterrupt:
             print(json.dumps({
                 "data": [],
-                "error": "Probing cancelled by user",
-                "meta": {"protocols_attempted": 0, "total_successful_probes": 0},
+                "error": "Discovery cancelled by user",
+                "meta": {"protocols_available": 0, "open_ports": 0},
                 "result_type": "error"
             }), file=sys.stderr)
             sys.exit(1)
@@ -251,7 +240,7 @@ Input JSON format:
             print(json.dumps({
                 "data": [],
                 "error": str(e),
-                "meta": {"protocols_attempted": 0, "total_successful_probes": 0},
+                "meta": {"protocols_available": 0, "open_ports": 0},
                 "result_type": "error"
             }), file=sys.stderr)
             sys.exit(1)

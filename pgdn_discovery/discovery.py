@@ -7,7 +7,6 @@ Supports both programmatic and CLI usage.
 
 import json
 import socket
-import ssl
 import time
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, asdict
@@ -30,7 +29,6 @@ class DiscoveryResult:
     ip: str
     open_ports: List[int]
     http_responses: Dict[int, Dict[str, Dict[str, Any]]]
-    tls_info: Dict[int, Dict[str, Any]]
     errors: Dict[str, str]
     timestamp: str
     duration_seconds: float
@@ -74,11 +72,12 @@ class NetworkProber:
         if paths is None:
             paths = COMMON_ENDPOINTS.copy()
         
+        # Fast staged discovery
+
         result = DiscoveryResult(
             ip=ip,
             open_ports=[],
             http_responses={},
-            tls_info={},
             errors={},
             timestamp=time.strftime("%Y-%m-%dT%H:%M:%S"),
             duration_seconds=0.0
@@ -88,7 +87,6 @@ class NetworkProber:
             # Stage 1: Port scan
             if stage in ["1", "all"]:
                 result.open_ports = self._port_scan(ip, ports)
-                result.tls_info = self._get_tls_info(ip, result.open_ports)
             
             # Stage 2: Web scan
             if stage in ["2", "all"]:
@@ -132,45 +130,6 @@ class NetworkProber:
         
         return open_ports
     
-    def _get_tls_info(self, ip: str, ports: List[int]) -> Dict[int, Dict[str, Any]]:
-        """
-        Get TLS certificate information for HTTPS ports.
-        
-        Args:
-            ip: Target IP address
-            ports: List of open ports to check
-            
-        Returns:
-            Dictionary mapping port to TLS info
-        """
-        tls_info = {}
-        
-        # Common HTTPS ports
-        https_ports = [443, 8443, 9443]
-        
-        for port in ports:
-            if port in https_ports:
-                try:
-                    context = ssl.create_default_context()
-                    context.check_hostname = False
-                    context.verify_mode = ssl.CERT_NONE
-                    
-                    with socket.create_connection((ip, port), timeout=self.timeout) as sock:
-                        with context.wrap_socket(sock, server_hostname=ip) as ssock:
-                            cert = ssock.getpeercert()
-                            tls_info[port] = {
-                                "subject": dict(x[0] for x in cert.get("subject", [])),
-                                "issuer": dict(x[0] for x in cert.get("issuer", [])),
-                                "version": cert.get("version"),
-                                "serial_number": str(cert.get("serialNumber", "")),
-                                "not_before": cert.get("notBefore"),
-                                "not_after": cert.get("notAfter")
-                            }
-                            
-                except Exception as e:
-                    tls_info[port] = {"error": str(e)}
-        
-        return tls_info
     
     def _web_scan(self, ip: str, ports: List[int], paths: List[str]) -> Dict[int, Dict[str, Dict[str, Any]]]:
         """

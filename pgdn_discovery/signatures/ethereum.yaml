@@ -1,0 +1,3 @@
+name: "Ethereum"
+rpc_method: "eth_chainId"
+ports: [8545, 443, 80]

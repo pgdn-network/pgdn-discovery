@@ -1,17 +1,16 @@
 # PGDN Discovery
 
-A professional Python library for discovering DePIN (Decentralized Physical Infrastructure Network) protocols on network nodes. Designed as a library-first tool with optional command-line interface for protocol probing and detection.
+A fast, simple Python library for discovering DePIN (Decentralized Physical Infrastructure Network) protocols on network nodes using RPC-based detection. Built for speed and reliability with early exit optimization.
 
 ## Features
 
-- 🔍 **Professional Discovery API**: Clean, configurable discovery methods and tools
-- 🚀 **High Performance**: Fast network probing with nmap integration
-- 🤖 **AI-Powered Analysis**: Advanced protocol identification using OpenAI/Anthropic APIs
-- 📊 **Confidence Scoring**: Reliable confidence levels for protocol detection
-- 🔧 **Library First**: Clean Python package structure with modular components
-- 🎯 **Evidence-Based**: Detailed evidence collection for protocol identification
-- 📄 **Structured Results**: Standardized result objects with full metadata
-- ⚡ **Nmap Integration**: Professional-grade port scanning capabilities
+- 🚀 **Fast RPC Detection**: Direct JSON-RPC calls for instant protocol identification
+- 🎯 **Early Exit**: Stops scanning immediately upon finding protocols (max 3 supported)
+- 📊 **Structured Results**: Consistent JSON format with data arrays and error blocks
+- 🔧 **Easy Protocol Addition**: Simple YAML configuration for new protocols
+- 🎛️ **Protocol Filtering**: Scan specific protocols or discover all available
+- 📋 **Validation**: Built-in protocol validation with helpful error messages
+- ⚡ **Probability Ordering**: Tests most likely ports first for faster detection
 
 ## Installation
 
@@ -29,98 +28,143 @@ pip install -e .
 
 ## Library Usage
 
-### Basic Network Discovery
-
-The core discovery functionality:
-
-```python
-from pgdn_discovery import discover_node, NetworkProber
-
-# Quick discovery using the convenience function
-result = discover_node("192.168.1.100")
-print(f"Open ports: {result['open_ports']}")
-print(f"HTTP responses: {result['http_responses']}")
-
-# Advanced usage with NetworkProber class
-prober = NetworkProber(timeout=10)
-result = prober.discover("192.168.1.100", stage="all")
-print(f"Duration: {result.duration_seconds}s")
-```
-
-### Targeted Protocol Probing
-
-For specific port/path combinations using the CLI with JSON input:
-
-```python
-from pgdn_discovery.discovery_components.probe_scanner import ProbeScanner
-
-# Initialize probe scanner
-scanner = ProbeScanner(timeout=5)
-
-# Define probes
-probes = [
-    {"protocol": "sui", "port": 9000, "path": "/metrics"},
-    {"protocol": "ethereum", "port": 8545, "path": "/"}
-]
-
-# Run probes
-result = scanner.probe_services("192.168.1.100", probes)
-if not result.error:
-    for probe_data in result.data:
-        print(f"Port {probe_data.port}: {probe_data.status_code}")
-```
-
-### Staged Discovery
-
-Run discovery in stages:
+### Basic Protocol Discovery
 
 ```python
 from pgdn_discovery import NetworkProber
 
-prober = NetworkProber(timeout=5)
+# Create prober instance
+prober = NetworkProber(timeout=10)
 
-# Stage 1: Port scanning only
-result = prober.discover("192.168.1.100", stage="1")
-print(f"Open ports: {result.open_ports}")
-
-# Stage 2: Web scanning only (assumes ports are open)
-result = prober.discover("192.168.1.100", stage="2", ports=[80, 443, 9000])
+# Discover all protocols on a node
+result = prober.discover("fullnode.mainnet.sui.io")
+print(f"Found protocols: {result.open_ports}")
 print(f"HTTP responses: {result.http_responses}")
-
-# All stages
-result = prober.discover("192.168.1.100", stage="all")
 ```
 
-### Custom Ports and Paths
-
-Specify custom ports and paths for discovery:
+### Convenience Function
 
 ```python
-from pgdn_discovery import discover_node, COMMON_PORTS, COMMON_ENDPOINTS
+from pgdn_discovery import discover_node
 
-# Use custom ports and paths
-custom_ports = [80, 443, 8080, 9000]
-custom_paths = ["/", "/metrics", "/api/v1/status"]
+# Quick discovery with default settings
+result = discover_node("fullnode.mainnet.sui.io", timeout=15)
+print(f"Discovery result: {result}")
 
-result = discover_node(
-    "192.168.1.100",
-    ports=custom_ports,
-    paths=custom_paths,
-    timeout=10
-)
+# With protocol filter
+result = discover_node("fullnode.mainnet.sui.io", protocol_filter="sui")
+print(f"Sui discovery: {result}")
 ```
 
-### Default Constants
+### Working with Results
 
 ```python
-from pgdn_discovery import COMMON_PORTS, COMMON_ENDPOINTS
+from pgdn_discovery import NetworkProber
 
-print("Default ports:", COMMON_PORTS)
-# Output: [80, 443, 8080, 9000, 8545, 30303]
+prober = NetworkProber(timeout=10)
+result = prober.discover("fullnode.mainnet.sui.io")
 
-print("Default endpoints:", COMMON_ENDPOINTS)
-# Output: ["/, "/metrics", "/health", "/rpc/v0", "/status"]
+# Access discovery results
+print(f"Target: {result.ip}")
+print(f"Duration: {result.duration_seconds}s")
+print(f"Timestamp: {result.timestamp}")
+
+# Check for protocols found
+if result.open_ports:
+    for port in result.open_ports:
+        if port in result.http_responses:
+            response = result.http_responses[port]["/"]
+            print(f"Protocol: {response['protocol']}")
+            print(f"Endpoint: {response['endpoint']}")
+
+# Check for errors
+if result.errors:
+    print(f"Errors: {result.errors}")
 ```
+
+## CLI Usage
+
+### Discover All Protocols
+
+```bash
+# Discover all protocols on a node
+pgdn-discovery discover fullnode.mainnet.sui.io
+
+# With custom timeout
+pgdn-discovery discover fullnode.mainnet.sui.io --timeout 15
+```
+
+### Protocol-Specific Discovery
+
+```bash
+# Discover only Sui protocol
+pgdn-discovery discover fullnode.mainnet.sui.io --protocol sui
+
+# Discover only Ethereum protocol
+pgdn-discovery discover eth-mainnet.example.com --protocol ethereum
+```
+
+### CLI Response Format
+
+**Success Response:**
+```json
+{"data": [{"protocol": "sui", "endpoint": "https://fullnode.mainnet.sui.io:443"}]}
+```
+
+**No Results:**
+```json
+{"data": []}
+```
+
+**Error Response:**
+```json
+{"error": "Protocol 'invalid' not found in signatures"}
+```
+
+### Alternative CLI Usage
+
+```bash
+# Use as Python module
+python -m pgdn_discovery discover fullnode.mainnet.sui.io --protocol sui
+
+# Use wrapper script
+python cli.py discover fullnode.mainnet.sui.io --protocol sui
+```
+
+## Protocol Configuration
+
+Protocols are defined in `pgdn_discovery/signatures.yaml`:
+
+```yaml
+protocols:
+  sui:
+    name: "Sui"
+    rpc_method: "sui_getChainIdentifier"
+    ports: [443, 9000, 9184]
+  
+  ethereum:
+    name: "Ethereum"
+    rpc_method: "eth_chainId"
+    ports: [8545, 443, 80]
+```
+
+### Adding New Protocols
+
+Add new protocol definitions to the `signatures.yaml` file:
+
+```yaml
+protocols:
+  your_protocol:
+    name: "Your Protocol"
+    rpc_method: "your_rpc_method"
+    ports: [8080, 443, 9000]
+```
+
+The system will automatically:
+- Validate protocol names when using `--protocol` filter
+- Test ports in the specified order (probability-based)
+- Make JSON-RPC calls to detect the protocol
+- Return results immediately when found
 
 ## Discovery Result Format
 
@@ -132,7 +176,6 @@ class DiscoveryResult:
     ip: str                          # Target IP address
     open_ports: List[int]           # List of open ports found
     http_responses: Dict[int, Dict[str, Dict[str, Any]]]  # Port -> Path -> Response data
-    tls_info: Dict[int, Dict[str, Any]]  # TLS certificate info by port
     errors: Dict[str, str]          # Any errors encountered
     timestamp: str                  # ISO timestamp
     duration_seconds: float         # Discovery duration
@@ -141,208 +184,118 @@ class DiscoveryResult:
         return asdict(self)
 ```
 
-## CLI Usage
-
-The package includes a command-line interface for targeted protocol probing.
-
-### Two-Stage Discovery CLI
-
-The CLI accepts JSON protocol definitions and performs targeted probing:
-
-```bash
-# Probe specific protocol endpoints
-echo '[{"protocol":"sui","results":[{"port":9000,"path":"/metrics"}]}]' | pgdn-discovery probe 192.168.1.100
-
-# From file
-pgdn-discovery probe 192.168.1.100 --input protocols.json
-
-# With custom timeout
-pgdn-discovery probe 192.168.1.100 --input protocols.json --timeout 10
-```
-
-### Input JSON Format
-
-```json
-[
-  {
-    "protocol": "sui",
-    "results": [
-      {
-        "port": 9000,
-        "path": "/metrics"
-      }
-    ]
-  },
-  {
-    "protocol": "ethereum",
-    "results": [
-      {
-        "port": 8545,
-        "path": "/"
-      }
-    ]
-  }
-]
-```
-
-## Package Structure
-
-The library is organized into modular components:
-
-```
-pgdn_discovery/
-├── __init__.py                   # Main package exports
-├── discovery.py                  # Core NetworkProber class
-├── discovery_client.py           # Enhanced discovery client
-├── discovery_components/         # Discovery components
-│   ├── probe_scanner.py         # Two-stage probe scanner
-│   ├── ai_detector.py           # AI-powered detection
-│   ├── binary_matcher.py        # Protocol matching
-│   ├── config_helper.py         # Configuration utilities
-│   └── nmap_scanner.py          # Network scanning
-├── core/
-│   └── logging.py               # Logging utilities
-└── tools/
-    └── __init__.py              # Tool utilities
-
-cli.py                           # CLI entry point
-tests.py                         # Test suite
-setup.py                         # Package configuration
-```
-
 ## Supported Protocols
 
-Currently detects these DePIN protocols:
+Currently supports these DePIN protocols:
 
-- **Filecoin/IPFS** - Storage networks and gateways
-- **Ethereum** - Execution and consensus clients
-- **Sui** - Full nodes and validators
-- **Celestia** - Data availability nodes
-- **Cosmos/Tendermint** - Consensus and application layers
-- **Polkadot/Substrate** - Relay and parachain nodes
-- **Solana** - Validators and RPC nodes
-- **Theta** - Video delivery networks
-- **Helium** - IoT and mobile networks
+- **Sui** - Full nodes and validators (`sui_getChainIdentifier`)
+- **Ethereum** - Execution clients (`eth_chainId`)
 
-Detection uses multiple methods:
-1. **Port Scanning** - Protocol-specific ports with nmap
-2. **HTTP Endpoints** - API endpoint probing
-3. **Banner Analysis** - Service banner pattern matching
-4. **Content Analysis** - Response content signatures
-5. **AI Analysis** - Machine learning protocol identification
+More protocols can be easily added by updating the `signatures.yaml` file with appropriate RPC methods and ports.
 
-## Advanced Usage
+## Performance Features
 
-### Batch Discovery
+### Early Exit Optimization
+- Stops scanning after finding 3 protocols (current maximum supported)
+- Tests ports in probability order for faster detection
+- Immediate return on successful RPC response
 
+### Efficient Scanning
+- Direct RPC calls (no port scanning or banner grabbing)
+- Concurrent protocol testing
+- Configurable timeouts for different network conditions
+
+### Example Performance
 ```python
-from concurrent.futures import ThreadPoolExecutor
-from pgdn_discovery import discover_node
+import time
+from pgdn_discovery import NetworkProber
 
-def discover_network_range(network_base="192.168.1", start=1, end=254):
-    """Discover all nodes in a network range"""
-    
-    def discover_single(ip):
-        host = f"{network_base}.{ip}"
-        return discover_node(host, timeout=5)
-    
-    with ThreadPoolExecutor(max_workers=20) as executor:
-        hosts = range(start, end + 1)
-        results = list(executor.map(discover_single, hosts))
-    
-    # Filter successful discoveries
-    found_nodes = [r for r in results if r['open_ports']]
-    return found_nodes
+prober = NetworkProber(timeout=5)
 
-# Usage
-nodes = discover_network_range("192.168.1", 1, 50)
-for node in nodes:
-    print(f"Found open ports {node['open_ports']} at {node['ip']}")
-```
+start_time = time.time()
+result = prober.discover("fullnode.mainnet.sui.io")
+end_time = time.time()
 
-### Custom Protocol Detection
-
-```python
-# Use the CLI with custom protocol definitions
-import json
-import subprocess
-
-custom_protocols = [
-    {
-        "protocol": "custom_service",
-        "results": [
-            {"port": 1234, "path": "/custom/api"},
-            {"port": 5678, "path": "/health"}
-        ]
-    }
-]
-
-# Write to file and use CLI
-with open('custom_protocols.json', 'w') as f:
-    json.dump(custom_protocols, f)
-
-result = subprocess.run([
-    'pgdn-discovery', 'probe', '192.168.1.100',
-    '--input', 'custom_protocols.json'
-], capture_output=True, text=True)
-
-print(result.stdout)
+print(f"Discovery completed in {end_time - start_time:.2f}s")
+print(f"Found {len(result.open_ports)} protocols")
 ```
 
 ## Development
 
-### Core Components
-
-- **NetworkProber**: Main discovery class with staged scanning
-- **ProbeScanner**: Targeted protocol probing with nmap integration
-- **DiscoveryResult**: Standardized result format
-- **discover_node**: Convenience function for quick discovery
-
-### Adding New Protocols
-
-The modular design allows easy protocol addition:
-
-1. **Add signature patterns** in the appropriate discovery component
-2. **Update probe configurations** for new protocol ports/endpoints
-3. **Train AI models** with new protocol examples (optional)
-
 ### Running Tests
 
 ```bash
-python tests.py
+# Test CLI functionality
+python cli.py discover fullnode.mainnet.sui.io --protocol sui
+
+# Test library functionality
+python -c "from pgdn_discovery import discover_node; print(discover_node('fullnode.mainnet.sui.io'))"
+
+# Test with module execution
+python -m pgdn_discovery discover fullnode.mainnet.sui.io --protocol sui
 ```
 
-## Examples
+### Package Structure
 
-### Basic Port Scanning
+```
+pgdn_discovery/
+├── __init__.py          # Main package exports
+├── __main__.py          # Module execution entry point
+├── cli.py               # CLI implementation
+├── discovery.py         # Core NetworkProber class
+└── signatures.yaml      # Protocol definitions
+
+cli.py                   # CLI wrapper script
+setup.py                 # Package configuration
+```
+
+## API Reference
+
+### NetworkProber Class
+
+```python
+class NetworkProber:
+    def __init__(self, timeout: int = 5):
+        """Initialize with custom timeout"""
+        
+    def discover(self, ip: str, protocol_filter: Optional[str] = None) -> DiscoveryResult:
+        """Discover protocols on target IP"""
+```
+
+### Convenience Functions
+
+```python
+def discover_node(ip: str, timeout: int = 5, protocol_filter: Optional[str] = None) -> Dict[str, Any]:
+    """Convenience function returning dictionary result"""
+```
+
+### CLI Functions
+
+```python
+def discover_protocols(ip: str, timeout: int = 5, protocol_filter: Optional[str] = None) -> Dict[str, Any]:
+    """CLI discovery function with structured JSON response"""
+```
+
+## Error Handling
+
+The system handles errors gracefully:
 
 ```python
 from pgdn_discovery import NetworkProber
 
 prober = NetworkProber(timeout=5)
-result = prober.discover("192.168.1.100", stage="1")
-print(f"Found {len(result.open_ports)} open ports: {result.open_ports}")
+result = prober.discover("invalid.host.com")
+
+if result.errors:
+    print(f"Discovery errors: {result.errors}")
+else:
+    print(f"Discovery successful: {result.open_ports}")
 ```
 
-### HTTP Service Discovery
-
-```python
-from pgdn_discovery import discover_node
-
-result = discover_node("192.168.1.100", stage="2", ports=[80, 443, 8080])
-for port, responses in result['http_responses'].items():
-    for path, data in responses.items():
-        if 'status_code' in data:
-            print(f"Port {port}{path}: HTTP {data['status_code']}")
+CLI errors are returned as JSON:
+```json
+{"error": "Connection timeout"}
 ```
-
-## Performance Considerations
-
-- **Concurrent Discovery**: Use ThreadPoolExecutor for multiple targets
-- **Timeout Management**: Set appropriate timeouts based on network conditions
-- **Method Selection**: Choose specific methods instead of running all
-- **Caching**: Consider caching results for frequently scanned targets
-- **Rate Limiting**: Implement delays for large-scale scanning to avoid overwhelming targets
 
 ## License
 
@@ -352,8 +305,9 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 1. Fork the repository
 2. Create a feature branch
-3. Make your changes with tests
-4. Submit a pull request
+3. Make your changes
+4. Test with existing protocols
+5. Submit a pull request
 
 ## Support
 

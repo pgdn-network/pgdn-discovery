@@ -13,6 +13,10 @@ from dataclasses import dataclass, asdict
 try:
     import requests
     HAS_REQUESTS = True
+    
+    # Suppress SSL warnings for unverified HTTPS requests
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 except ImportError:
     HAS_REQUESTS = False
 

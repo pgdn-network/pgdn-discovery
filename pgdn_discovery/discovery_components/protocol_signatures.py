@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
+import importlib.resources
 
 
 @dataclass
@@ -45,22 +46,32 @@ class ProtocolSignatureMatcher:
         """Load protocol signature definitions from YAML files"""
         signatures = {}
         
-        # Get the path to the signatures directory
-        current_dir = Path(__file__).parent.parent  # Go up from discovery_components to pgdn_discovery
-        signatures_dir = current_dir / "signatures"
-        
-        if not signatures_dir.exists():
-            raise FileNotFoundError(f"Signatures directory not found: {signatures_dir}")
-        
-        # Load all YAML files in the signatures directory
-        for yaml_file in signatures_dir.glob("*.yaml"):
-            try:
-                protocol_name = yaml_file.stem  # filename without extension
-                signature_config = self._load_signature_from_yaml(yaml_file)
-                signatures[protocol_name] = signature_config
-            except Exception as e:
-                print(f"Warning: Failed to load signature file {yaml_file}: {e}")
-                continue
+        try:
+            # Try to get signatures directory from package resources
+            signatures_dir = importlib.resources.files('pgdn_discovery') / 'signatures'
+            
+            if not signatures_dir.exists():
+                # Fallback to relative path for development
+                current_dir = Path(__file__).parent.parent
+                signatures_dir = current_dir / "signatures"
+                
+                if not signatures_dir.exists():
+                    raise FileNotFoundError(f"Signatures directory not found: {signatures_dir}")
+            
+            # Load all YAML files in the signatures directory
+            for yaml_file in signatures_dir.glob("*.yaml"):
+                try:
+                    protocol_name = yaml_file.stem  # filename without extension
+                    signature_config = self._load_signature_from_yaml(yaml_file)
+                    signatures[protocol_name] = signature_config
+                except Exception as e:
+                    print(f"Warning: Failed to load signature file {yaml_file}: {e}")
+                    continue
+            
+        except Exception as e:
+            print(f"Error loading protocol signatures: {e}")
+            # Return empty dict instead of raising to allow graceful degradation
+            return {}
         
         return signatures
     

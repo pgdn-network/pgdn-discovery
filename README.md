@@ -2,6 +2,8 @@
 
 A fast, simple Python library for discovering DePIN (Decentralized Physical Infrastructure Network) protocols on network nodes using both RPC-based and HTTP-based detection. Built for speed and reliability with early exit optimization.
 
+You should not be using this library without consent from the Sui network operators. This tool is intended for educational and research purposes only.
+
 ## Features
 
 - 🚀 **Fast Protocol Detection**: Direct JSON-RPC calls and HTTP requests for instant protocol identification
